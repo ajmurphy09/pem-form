@@ -1,0 +1,193 @@
+<!doctype html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Activity Log</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Arial; margin: 16px; max-width: 720px; }
+    h2 { margin: 8px 0 2px; }
+    .sub { color: #555; margin: 0 0 12px; }
+    label { display:block; margin-top: 14px; font-weight: 700; }
+    input, select, textarea, button { width: 100%; font-size: 16px; padding: 10px; margin-top: 6px; }
+    button { margin-top: 18px; font-weight: 800; }
+    .row { display:grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .status { margin-top: 12px; font-weight: 700; }
+    .ok { color: #0a7a2f; }
+    .bad { color: #b00020; }
+    .tiny { font-size: 13px; color: #666; margin-top: 10px; }
+    .pillbox { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+    .pill { border: 1px solid #ddd; border-radius: 999px; padding: 6px 10px; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <h2>Activity Log</h2>
+  <p class="sub">Pick an activity. Date + times auto-fill. Loads are auto-assigned.</p>
+
+  <label>Activity</label>
+  <select id="activity"></select>
+
+  <div class="tiny">Load types (auto):</div>
+  <div class="pillbox" id="loadPills"></div>
+
+  <div class="row">
+    <div>
+      <label>Date</label>
+      <input id="date" type="date" />
+    </div>
+    <div>
+      <label>Position</label>
+      <select id="position">
+        <option value="">—</option>
+        <option>Laying</option>
+        <option>Sitting</option>
+        <option>Standing</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="row">
+    <div>
+      <label>Start time</label>
+      <input id="start" type="time" />
+    </div>
+    <div>
+      <label>End time</label>
+      <input id="end" type="time" />
+    </div>
+  </div>
+
+  <label>Notes (optional)</label>
+  <textarea id="notes" rows="3" placeholder="Anything important?"></textarea>
+
+  <button id="submit" type="button">Save Entry</button>
+  <div class="status" id="status"></div>
+
+  <div class="tiny">Tip: Bookmark this page or link it from your home page.</div>
+
+  <!-- Hidden iframe + form (CORS-proof submit) -->
+  <iframe id="sink" name="sink" style="display:none;"></iframe>
+  <form id="sinkForm" method="POST" target="sink" style="display:none;">
+    <input type="hidden" name="payload" id="payloadField" value="">
+  </form>
+
+<script>
+  // ✅ Replace with your NEW Activity Apps Script /exec URL:
+  const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwKQl2OgDuCH0pyrT1YQD9cIZIh0nczUvM8z5GLpL4-QX5E3wkQeMVXYExI-R4LK_ca/exec";
+
+  // ---- Activities + load types ----
+  // If you want me to auto-generate this list from your CSV so it's exact, say “generate from CSV”
+  // and I’ll output the exact ACTIVITIES array matching your file.
+  const ACTIVITIES = [
+    // format: { activity: "Name", loads: ["Physical","Cognitive"] }
+    { activity: "Cooking", loads: ["Physical","Cognitive","Sensory"] },
+    { activity: "Grocery shopping", loads: ["Physical","Cognitive","Emotional","Sensory"] },
+    { activity: "Coding", loads: ["Cognitive"] },
+    { activity: "Sewing", loads: ["Physical","Cognitive","Sensory"] }
+  ];
+
+  const LOAD_ORDER = ["Physical", "Cognitive", "Emotional", "Sensory"];
+
+  function setNowDefaults() {
+    const now = new Date();
+
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, "0");
+    const d = String(now.getDate()).padStart(2, "0");
+    document.getElementById("date").value = `${y}-${m}-${d}`;
+
+    const hh = String(now.getHours()).padStart(2, "0");
+    const mm = String(now.getMinutes()).padStart(2, "0");
+    const t = `${hh}:${mm}`;
+    document.getElementById("start").value = t;
+    document.getElementById("end").value = t;
+  }
+
+  function renderActivityDropdown() {
+    const sel = document.getElementById("activity");
+    sel.innerHTML = "";
+
+    const opt0 = document.createElement("option");
+    opt0.value = "";
+    opt0.textContent = "—";
+    sel.appendChild(opt0);
+
+    const sorted = [...ACTIVITIES].sort((a,b) => a.activity.localeCompare(b.activity));
+    for (const item of sorted) {
+      const opt = document.createElement("option");
+      opt.value = item.activity;
+      opt.textContent = item.activity;
+      opt.dataset.loads = JSON.stringify(LOAD_ORDER.filter(x => item.loads.includes(x)));
+      sel.appendChild(opt);
+    }
+  }
+
+  function renderLoadPills(loads) {
+    const root = document.getElementById("loadPills");
+    root.innerHTML = "";
+    (loads || []).forEach(l => {
+      const div = document.createElement("div");
+      div.className = "pill";
+      div.textContent = l;
+      root.appendChild(div);
+    });
+  }
+
+  function getSelectedLoads() {
+    const sel = document.getElementById("activity");
+    const opt = sel.options[sel.selectedIndex];
+    if (!opt || !opt.dataset.loads) return [];
+    try { return JSON.parse(opt.dataset.loads); } catch { return []; }
+  }
+
+  window.addEventListener("DOMContentLoaded", () => {
+    document.getElementById("sinkForm").action = WEB_APP_URL;
+
+    renderActivityDropdown();
+    setNowDefaults();
+
+    document.getElementById("activity").addEventListener("change", () => {
+      renderLoadPills(getSelectedLoads());
+    });
+
+    renderLoadPills([]);
+  });
+
+  document.getElementById("submit").addEventListener("click", () => {
+    const status = document.getElementById("status");
+    status.className = "status";
+    status.textContent = "Saving…";
+
+    const activity = document.getElementById("activity").value;
+    if (!activity) {
+      status.className = "status bad";
+      status.textContent = "Choose an activity first ❌";
+      return;
+    }
+
+    const loads = getSelectedLoads();
+    const payload = {
+      activity,
+      loads,
+      load_flags: {
+        physical: loads.includes("Physical") ? 1 : 0,
+        cognitive: loads.includes("Cognitive") ? 1 : 0,
+        emotional: loads.includes("Emotional") ? 1 : 0,
+        sensory: loads.includes("Sensory") ? 1 : 0
+      },
+      date: document.getElementById("date").value,
+      start_time: document.getElementById("start").value,
+      end_time: document.getElementById("end").value,
+      position: document.getElementById("position").value,
+      notes: document.getElementById("notes").value
+    };
+
+    document.getElementById("payloadField").value = JSON.stringify(payload);
+    document.getElementById("sinkForm").action = WEB_APP_URL;
+    document.getElementById("sinkForm").submit();
+
+    status.className = "status ok";
+    status.textContent = "Sent ✅";
+  });
+</script>
+</body>
+</html>
