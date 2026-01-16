@@ -90,7 +90,6 @@
   ];
 
   // Load-type mapping from your table
-  // Each symptom maps to which loads it impacts
   const LOAD_MAP = {
     "Brain fog":                             { physical:false, cognitive:true,  emotional:false, sensory:true  },
     "Burning sensation on skin":             { physical:true,  cognitive:false, emotional:false, sensory:true  },
@@ -222,22 +221,21 @@
     const { totals, counts } = computeLoadFromSymptoms(symptoms_rated);
 
     const payload = {
-      symptoms_rated,                 // { "Brain fog": 7, ... }
-      load_totals: totals,            // { physical: 14, cognitive: 22, emotional: 9, sensory: 18 }
-      load_counts: counts,            // { physical: 3,  cognitive: 4,  emotional: 2, sensory: 3 }
+      symptoms_rated,
+      load_totals: totals,
+      load_counts: counts,
       notes: document.getElementById("notes").value
     };
 
     try {
-      const res = await fetch(WEB_APP_URL, {
+      await fetch(WEB_APP_URL, {
         method: "POST",
+        mode: "no-cors",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
       });
 
-      const out = await res.json();
-      if (!out.ok) throw new Error(out.error || "Unknown error");
-
+      // With no-cors, we can't read the response. If the request was sent, show success.
       status.classList.add("ok");
       status.textContent = "Saved ✅";
 
@@ -251,4 +249,3 @@
 </script>
 </body>
 </html>
-
