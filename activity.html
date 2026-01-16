@@ -17,11 +17,12 @@
     .tiny { font-size: 13px; color: #666; margin-top: 10px; }
     .pillbox { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
     .pill { border: 1px solid #ddd; border-radius: 999px; padding: 6px 10px; font-size: 13px; }
+    .pill input { width:auto; margin:0 8px 0 0; padding:0; }
   </style>
 </head>
 <body>
   <h2>Activity Log</h2>
-  <p class="sub">Pick an activity. Date + times auto-fill. Loads are auto-assigned.</p>
+  <p class="sub">Pick an activity. Date + times auto-fill. Loads are auto-assigned. Positions can be multi-select.</p>
 
   <label>Activity</label>
   <select id="activity"></select>
@@ -35,13 +36,12 @@
       <input id="date" type="date" />
     </div>
     <div>
-      <label>Position</label>
-      <select id="position">
-        <option value="">—</option>
-        <option>Laying</option>
-        <option>Sitting</option>
-        <option>Standing</option>
-      </select>
+      <label>Positions (select all that apply)</label>
+      <div class="pillbox" id="positions">
+        <label class="pill"><input type="checkbox" value="Laying">Laying</label>
+        <label class="pill"><input type="checkbox" value="Sitting">Sitting</label>
+        <label class="pill"><input type="checkbox" value="Standing">Standing</label>
+      </div>
     </div>
   </div>
 
@@ -62,7 +62,7 @@
   <button id="submit" type="button">Save Entry</button>
   <div class="status" id="status"></div>
 
-  <div class="tiny">Tip: Bookmark this page or link it from your home page.</div>
+  <div class="tiny">Tip: link this from your home page (home.html).</div>
 
   <!-- Hidden iframe + form (CORS-proof submit) -->
   <iframe id="sink" name="sink" style="display:none;"></iframe>
@@ -71,25 +71,139 @@
   </form>
 
 <script>
-  // ✅ Replace with your NEW Activity Apps Script /exec URL:
+  // ✅ Replace with your Activity Apps Script /exec URL:
   const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwKQl2OgDuCH0pyrT1YQD9cIZIh0nczUvM8z5GLpL4-QX5E3wkQeMVXYExI-R4LK_ca/exec";
-
-  // ---- Activities + load types ----
-  // If you want me to auto-generate this list from your CSV so it's exact, say “generate from CSV”
-  // and I’ll output the exact ACTIVITIES array matching your file.
-  const ACTIVITIES = [
-    // format: { activity: "Name", loads: ["Physical","Cognitive"] }
-    { activity: "Cooking", loads: ["Physical","Cognitive","Sensory"] },
-    { activity: "Grocery shopping", loads: ["Physical","Cognitive","Emotional","Sensory"] },
-    { activity: "Coding", loads: ["Cognitive"] },
-    { activity: "Sewing", loads: ["Physical","Cognitive","Sensory"] }
-  ];
 
   const LOAD_ORDER = ["Physical", "Cognitive", "Emotional", "Sensory"];
 
+  // Generated from your CSV (CFS Tracker - Activity Types.csv)
+  const ACTIVITIES = [
+    {"activity":"3D modeling","loads":["Cognitive"]},
+    {"activity":"3D printer setup and handling","loads":["Physical","Cognitive"]},
+    {"activity":"Administrative days","loads":["Cognitive","Emotional"]},
+    {"activity":"Advocacy / self-advocacy","loads":["Cognitive","Emotional"]},
+    {"activity":"Anticipation (waiting on results, decisions)","loads":["Emotional"]},
+    {"activity":"Application writing","loads":["Cognitive","Emotional"]},
+    {"activity":"Asking for help","loads":["Emotional"]},
+    {"activity":"Background noise","loads":["Sensory"]},
+    {"activity":"Being dependent on others","loads":["Emotional"]},
+    {"activity":"Being misunderstood","loads":["Emotional"]},
+    {"activity":"Being observed","loads":["Emotional"]},
+    {"activity":"Blue light exposure","loads":["Sensory"]},
+    {"activity":"Boundaries setting","loads":["Cognitive","Emotional"]},
+    {"activity":"Bright lights","loads":["Sensory"]},
+    {"activity":"Building prototypes","loads":["Physical","Cognitive"]},
+    {"activity":"Carrying items","loads":["Physical"]},
+    {"activity":"Cleaning days","loads":["Physical","Cognitive"]},
+    {"activity":"Clothing textures","loads":["Sensory"]},
+    {"activity":"Coding","loads":["Cognitive"]},
+    {"activity":"Coding for long sessions","loads":["Physical","Cognitive"]},
+    {"activity":"Commuting","loads":["Physical","Cognitive","Sensory"]},
+    {"activity":"Conflict","loads":["Emotional"]},
+    {"activity":"Cooking","loads":["Physical","Cognitive","Sensory"]},
+    {"activity":"Crafting","loads":["Physical","Cognitive","Sensory"]},
+    {"activity":"Creative ideation","loads":["Cognitive"]},
+    {"activity":"Creative production","loads":["Cognitive","Emotional"]},
+    {"activity":"Crowded environments","loads":["Emotional","Sensory"]},
+    {"activity":"Data cleaning","loads":["Cognitive"]},
+    {"activity":"Debugging","loads":["Cognitive"]},
+    {"activity":"Debugging complex problems","loads":["Cognitive"]},
+    {"activity":"Decision making","loads":["Cognitive"]},
+    {"activity":"Deep cleaning","loads":["Physical","Cognitive"]},
+    {"activity":"Difficult conversations","loads":["Emotional"]},
+    {"activity":"Disappointment","loads":["Emotional"]},
+    {"activity":"Dishes","loads":["Physical"]},
+    {"activity":"Documentation","loads":["Cognitive"]},
+    {"activity":"Driving","loads":["Physical","Cognitive","Sensory"]},
+    {"activity":"Editing","loads":["Cognitive"]},
+    {"activity":"Email","loads":["Cognitive"]},
+    {"activity":"Errands","loads":["Physical","Cognitive"]},
+    {"activity":"Events","loads":["Physical","Emotional","Sensory"]},
+    {"activity":"Explaining illness","loads":["Cognitive","Emotional"]},
+    {"activity":"Family interactions","loads":["Emotional"]},
+    {"activity":"Fast scrolling","loads":["Cognitive","Sensory"]},
+    {"activity":"Feeling rushed","loads":["Emotional"]},
+    {"activity":"Filming or recording","loads":["Cognitive","Sensory"]},
+    {"activity":"Financial tasks","loads":["Cognitive","Emotional"]},
+    {"activity":"Fluorescent lighting","loads":["Sensory"]},
+    {"activity":"Following instructions","loads":["Cognitive"]},
+    {"activity":"Forms and paperwork","loads":["Cognitive"]},
+    {"activity":"Gardening","loads":["Physical","Sensory"]},
+    {"activity":"Getting dressed","loads":["Physical","Sensory"]},
+    {"activity":"Grant writing","loads":["Cognitive","Emotional"]},
+    {"activity":"Grief processing","loads":["Emotional"]},
+    {"activity":"Grocery shopping","loads":["Physical","Cognitive","Emotional","Sensory"]},
+    {"activity":"Hardware troubleshooting","loads":["Cognitive"]},
+    {"activity":"Humidity","loads":["Sensory"]},
+    {"activity":"Laundry","loads":["Physical"]},
+    {"activity":"Learning new material","loads":["Cognitive"]},
+    {"activity":"Learning new tools","loads":["Cognitive"]},
+    {"activity":"Lifting objects","loads":["Physical"]},
+    {"activity":"Light housework","loads":["Physical"]},
+    {"activity":"Loud noises","loads":["Sensory"]},
+    {"activity":"Meal prep","loads":["Physical","Cognitive"]},
+    {"activity":"Medical appointments","loads":["Physical","Cognitive","Emotional","Sensory"]},
+    {"activity":"Motion","loads":["Sensory"]},
+    {"activity":"Moving spaces around","loads":["Physical","Cognitive"]},
+    {"activity":"Multiple conversations at once","loads":["Cognitive","Sensory"]},
+    {"activity":"Multitasking","loads":["Cognitive"]},
+    {"activity":"Music","loads":["Sensory"]},
+    {"activity":"Notifications","loads":["Cognitive","Sensory"]},
+    {"activity":"Open-plan spaces","loads":["Sensory"]},
+    {"activity":"Organizing files or data","loads":["Cognitive"]},
+    {"activity":"Packing for trips","loads":["Physical","Cognitive"]},
+    {"activity":"Packing or unpacking","loads":["Physical","Cognitive"]},
+    {"activity":"Pattern analysis","loads":["Cognitive"]},
+    {"activity":"Personal care (showering, hair, skincare)","loads":["Physical","Sensory"]},
+    {"activity":"Pet care","loads":["Physical","Cognitive","Emotional"]},
+    {"activity":"Photography / scanning objects","loads":["Physical","Cognitive"]},
+    {"activity":"Physical therapy exercises","loads":["Physical"]},
+    {"activity":"Planning","loads":["Cognitive"]},
+    {"activity":"Presenting ideas","loads":["Cognitive","Emotional"]},
+    {"activity":"Pressure to perform","loads":["Emotional"]},
+    {"activity":"Problem solving","loads":["Cognitive"]},
+    {"activity":"Public posting","loads":["Cognitive","Emotional"]},
+    {"activity":"Reading","loads":["Cognitive"]},
+    {"activity":"Rearranging spaces","loads":["Physical","Cognitive"]},
+    {"activity":"Receiving bad news","loads":["Emotional"]},
+    {"activity":"Relationship conversations","loads":["Emotional"]},
+    {"activity":"Research","loads":["Cognitive"]},
+    {"activity":"Robotics hardware assembly","loads":["Physical","Cognitive"]},
+    {"activity":"Scheduling","loads":["Cognitive"]},
+    {"activity":"Screens","loads":["Cognitive","Sensory"]},
+    {"activity":"Seams / pressure points","loads":["Sensory"]},
+    {"activity":"Sewing","loads":["Physical","Cognitive","Sensory"]},
+    {"activity":"Sharing personal experiences","loads":["Emotional"]},
+    {"activity":"Small talk","loads":["Cognitive","Emotional"]},
+    {"activity":"Social outings","loads":["Physical","Emotional","Sensory"]},
+    {"activity":"Socializing","loads":["Cognitive","Emotional"]},
+    {"activity":"Stairs","loads":["Physical"]},
+    {"activity":"Standing tasks","loads":["Physical"]},
+    {"activity":"Stores","loads":["Cognitive","Emotional","Sensory"]},
+    {"activity":"Strategy thinking","loads":["Cognitive"]},
+    {"activity":"Stretching","loads":["Physical"]},
+    {"activity":"Strong smells","loads":["Sensory"]},
+    {"activity":"Supporting others emotionally","loads":["Emotional"]},
+    {"activity":"System design","loads":["Cognitive"]},
+    {"activity":"Teaching or explaining","loads":["Cognitive","Emotional"]},
+    {"activity":"Temperature extremes","loads":["Sensory"]},
+    {"activity":"Texting","loads":["Cognitive"]},
+    {"activity":"Tool use","loads":["Physical"]},
+    {"activity":"Traveling","loads":["Physical","Cognitive","Emotional","Sensory"]},
+    {"activity":"Troubleshooting","loads":["Cognitive"]},
+    {"activity":"Tutorials or courses","loads":["Cognitive"]},
+    {"activity":"TV","loads":["Cognitive","Sensory"]},
+    {"activity":"Uncertainty","loads":["Emotional"]},
+    {"activity":"Vibrations","loads":["Sensory"]},
+    {"activity":"Visual clutter","loads":["Sensory"]},
+    {"activity":"Walking long distances","loads":["Physical"]},
+    {"activity":"Walking short distances","loads":["Physical"]},
+    {"activity":"Wind","loads":["Sensory"]},
+    {"activity":"Writing","loads":["Cognitive"]}
+  ];
+
   function setNowDefaults() {
     const now = new Date();
-
     const y = now.getFullYear();
     const m = String(now.getMonth() + 1).padStart(2, "0");
     const d = String(now.getDate()).padStart(2, "0");
@@ -113,10 +227,11 @@
 
     const sorted = [...ACTIVITIES].sort((a,b) => a.activity.localeCompare(b.activity));
     for (const item of sorted) {
+      const loads = LOAD_ORDER.filter(x => item.loads.includes(x));
       const opt = document.createElement("option");
       opt.value = item.activity;
       opt.textContent = item.activity;
-      opt.dataset.loads = JSON.stringify(LOAD_ORDER.filter(x => item.loads.includes(x)));
+      opt.dataset.loads = JSON.stringify(loads);
       sel.appendChild(opt);
     }
   }
@@ -139,9 +254,13 @@
     try { return JSON.parse(opt.dataset.loads); } catch { return []; }
   }
 
+  function getSelectedPositions() {
+    return [...document.querySelectorAll("#positions input[type='checkbox']:checked")]
+      .map(x => x.value);
+  }
+
   window.addEventListener("DOMContentLoaded", () => {
     document.getElementById("sinkForm").action = WEB_APP_URL;
-
     renderActivityDropdown();
     setNowDefaults();
 
@@ -165,6 +284,8 @@
     }
 
     const loads = getSelectedLoads();
+    const positions = getSelectedPositions();
+
     const payload = {
       activity,
       loads,
@@ -177,7 +298,7 @@
       date: document.getElementById("date").value,
       start_time: document.getElementById("start").value,
       end_time: document.getElementById("end").value,
-      position: document.getElementById("position").value,
+      positions, // <-- array
       notes: document.getElementById("notes").value
     };
 
