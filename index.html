@@ -17,6 +17,15 @@
     .ok { color: #0a7a2f; }
     .bad { color: #b00020; }
     .tiny { font-size: 13px; color: #666; margin-top: 8px; }
+
+    /* Symptom toggle + rating UI */
+    .symptomRow { border: 1px solid #ddd; border-radius: 14px; padding: 10px; margin-top: 10px; }
+    .symptomTop { display:flex; align-items:flex-start; justify-content:space-between; gap: 10px; }
+    .symptomName { font-weight: 700; line-height: 1.2; }
+    .symptomControls { margin-top: 10px; display:none; }
+    .sliderWrap { display:flex; align-items:center; gap: 10px; }
+    .sliderWrap input[type="range"] { width: 100%; padding: 0; }
+    .badge { min-width: 34px; text-align:center; font-weight:800; }
   </style>
 </head>
 <body>
@@ -60,17 +69,8 @@
     </div>
   </div>
 
-  <label>Symptoms</label>
-  <div class="pillbox" id="symptoms">
-    <label class="pill"><input type="checkbox" value="Fatigue">Fatigue</label>
-    <label class="pill"><input type="checkbox" value="Brain fog">Brain fog</label>
-    <label class="pill"><input type="checkbox" value="Pain">Pain</label>
-    <label class="pill"><input type="checkbox" value="Flu-like">Flu-like</label>
-    <label class="pill"><input type="checkbox" value="Headache">Headache</label>
-    <label class="pill"><input type="checkbox" value="Light sensitivity">Light sensitivity</label>
-    <label class="pill"><input type="checkbox" value="Sound sensitivity">Sound sensitivity</label>
-    <label class="pill"><input type="checkbox" value="GI symptoms">GI symptoms</label>
-  </div>
+  <label>Symptoms (toggle any that apply, then rate 1–10)</label>
+  <div id="symptomList"></div>
 
   <label>Triggers (best guess)</label>
   <div class="pillbox" id="triggers">
@@ -93,12 +93,99 @@
 
 <script>
   // Paste your Apps Script Web App URL here (ends with /exec):
-  const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbymjmXCHKFYkmnI8yO65ezT1ejDTh7gosnZN789rjbXglfn6-u1CdmzGK6lbfYKWwh6/exec";
+  const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyDYb8dRkZjYNt42fqZIe_zaQp1YwuQDw9N1OsowXHaMhuy3rh5USC9F03_S-5tS8tX/exec";
+
+  // Symptom list (toggle + rate)
+  const SYMPTOMS = [
+    "Brain-fog",
+    "Burning sensation on skin",
+    "Chronic pain (muscular or joint)",
+    "Cognitive dysfunction",
+    "Disturbed sleep pattern (lack of sleep or need to sleep too much often incl. vivid dreams)",
+    "Eye symptoms",
+    "Flu-like feelings",
+    "Headaches and Migraines",
+    "Heaviness in the limbs or whole body",
+    "Heightened sensitivity to sensory stimuli (sound, light, smells)",
+    "Increased chronic fatigue",
+    "Loss of appetite",
+    "Loss of stamina/ functional capacity",
+    "Muscle fatigue and weakness",
+    "Nausea",
+    "Night sweats or chills",
+    "Orthostatic intolerance/dizziness",
+    "Problems regulating temperature (and cold/hot extremities)",
+    "Heart palpitations",
+    "Speech problems",
+    "Temporary paralysis",
+    "Short-term memory problems",
+    "Sore throat",
+    "Swollen and painful glands",
+    "Tinnitus (ringing in the ears)",
+    "Trembling/ instability of muscle and/or limbs",
+    "Word-finding problems"
+  ];
 
   function checkedValues(containerId) {
     return [...document.querySelectorAll(`#${containerId} input[type="checkbox"]:checked`)]
       .map(x => x.value);
   }
+
+  function renderSymptoms() {
+    const root = document.getElementById("symptomList");
+    root.innerHTML = "";
+
+    SYMPTOMS.forEach((name, i) => {
+      const id = `sym_${i}`;
+      const row = document.createElement("div");
+      row.className = "symptomRow";
+
+      row.innerHTML = `
+        <div class="symptomTop">
+          <label class="symptomName" for="${id}_chk">${name}</label>
+          <input id="${id}_chk" type="checkbox" />
+        </div>
+        <div class="symptomControls" id="${id}_controls">
+          <div class="sliderWrap">
+            <span class="badge" id="${id}_val">5</span>
+            <input id="${id}_range" type="range" min="1" max="10" step="1" value="5" />
+          </div>
+          <div class="tiny">1 = mild, 10 = worst</div>
+        </div>
+      `;
+
+      root.appendChild(row);
+
+      const chk = row.querySelector(`#${id}_chk`);
+      const controls = row.querySelector(`#${id}_controls`);
+      const range = row.querySelector(`#${id}_range`);
+      const val = row.querySelector(`#${id}_val`);
+
+      chk.addEventListener("change", () => {
+        controls.style.display = chk.checked ? "block" : "none";
+      });
+
+      range.addEventListener("input", () => {
+        val.textContent = range.value;
+      });
+    });
+  }
+
+  function collectSymptomRatings() {
+    const out = {};
+    const rows = document.querySelectorAll("#symptomList .symptomRow");
+    rows.forEach((row, i) => {
+      const name = SYMPTOMS[i];
+      const checked = row.querySelector("input[type='checkbox']").checked;
+      if (checked) {
+        const rating = row.querySelector("input[type='range']").value;
+        out[name] = Number(rating);
+      }
+    });
+    return out;
+  }
+
+  window.addEventListener("DOMContentLoaded", renderSymptoms);
 
   document.getElementById("submit").addEventListener("click", async () => {
     const status = document.getElementById("status");
@@ -111,7 +198,7 @@
       cognitive: document.getElementById("cognitive").value,
       emotional: document.getElementById("emotional").value,
       sensory: document.getElementById("sensory").value,
-      symptoms: checkedValues("symptoms"),
+      symptoms_rated: collectSymptomRatings(),
       triggers: checkedValues("triggers"),
       notes: document.getElementById("notes").value
     };
