@@ -26,14 +26,23 @@
     .loadGrid { display:grid; grid-template-columns: 1fr 1fr; gap: 8px; }
     .loadItem { font-size: 14px; color:#333; }
     .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+
     .banner { margin-top: 10px; padding: 10px; border: 1px solid #eee; border-radius: 12px; background:#fafafa; }
+    .bannerRow { display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; }
+    .linkBtn { border:none; background:none; padding:0; color:#0b57d0; text-decoration:underline; cursor:pointer; font-size:13px; }
   </style>
 </head>
 <body>
   <h2>PEM Symptom Log</h2>
-  <p class="sub">First log each day is blank. Later logs auto-fill from your last entry (you can tweak and re-save).</p>
+  <p class="sub">First log each day is blank. Later logs auto-fill from your last entry (edit as needed).</p>
 
-  <div class="banner tiny" id="prefillBanner" style="display:none;"></div>
+  <div class="banner tiny" id="prefillBanner" style="display:none;">
+    <div class="bannerRow">
+      <div id="prefillText"></div>
+      <button class="linkBtn" id="clearPrefill" type="button" style="display:none;">Clear today’s prefill</button>
+    </div>
+    <div id="prefillDebug" class="mono" style="margin-top:6px; opacity:0.75;"></div>
+  </div>
 
   <label>Symptoms (toggle any that apply, then rate 1–10)</label>
   <div id="symptomList"></div>
@@ -63,19 +72,16 @@
   </form>
 
 <script>
-  // ✅ Your Apps Script Web App URL (must end with /exec):
+  // ✅ Paste your Apps Script Web App URL (must end with /exec):
   const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxyqzXjqB5oixLURSjfkD3reB2uiXBO3aNHXIMhUc4XKuaNaPIbGAzKAY5JGLnvsJzQ/exec";
 
   // ---- Local prefill config ----
-  const STORAGE_KEY = "pem_last_entry_v1";
+  const STORAGE_KEY = "pem_last_entry_v2";
 
-  // Uses device local time for “day”. (If you want strict Chicago time later, we can do that too.)
+  // Local “day” key
   function todayKey() {
     const d = new Date();
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
-    return `${y}-${m}-${day}`;
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
   }
 
   function loadLastEntryForToday() {
@@ -84,6 +90,7 @@
       if (!raw) return null;
       const obj = JSON.parse(raw);
       if (!obj || obj.day !== todayKey()) return null;
+      if (!obj.payload || typeof obj.payload !== "object") return null;
       return obj;
     } catch {
       return null;
@@ -91,99 +98,80 @@
   }
 
   function saveLastEntryForToday(payload) {
-    const obj = {
-      day: todayKey(),
-      saved_at: new Date().toISOString(),
-      payload
-    };
+    const obj = { day: todayKey(), saved_at: new Date().toISOString(), payload };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(obj));
   }
 
-  // Canonical symptom labels (match your table)
+  function clearTodayPrefill() {
+    localStorage.removeItem(STORAGE_KEY);
+  }
+
+  // Canonical symptom labels
   const SYMPTOMS = [
-    "Brain fog",
-    "Burning sensation on skin",
-    "Chronic pain (muscular or joint)",
-    "Cognitive dysfunction",
-    "Disturbed sleep pattern",
-    "Eye symptoms",
-    "Flu-like feelings",
-    "Headaches and migraines",
-    "Heaviness in limbs or whole body",
-    "Heightened sensory sensitivity",
-    "Increased chronic fatigue",
-    "Loss of appetite",
-    "Loss of stamina / functional capacity",
-    "Muscle fatigue and weakness",
-    "Nausea",
-    "Night sweats or chills",
-    "Orthostatic intolerance / dizziness",
-    "Temperature regulation problems",
-    "Heart palpitations",
-    "Speech problems",
-    "Temporary paralysis",
-    "Short-term memory problems",
-    "Sore throat",
-    "Swollen and painful glands",
-    "Tinnitus (ringing in ears)",
-    "Trembling / limb instability",
-    "Word-finding problems"
+    "Brain fog","Burning sensation on skin","Chronic pain (muscular or joint)","Cognitive dysfunction",
+    "Disturbed sleep pattern","Eye symptoms","Flu-like feelings","Headaches and migraines",
+    "Heaviness in limbs or whole body","Heightened sensory sensitivity","Increased chronic fatigue",
+    "Loss of appetite","Loss of stamina / functional capacity","Muscle fatigue and weakness","Nausea",
+    "Night sweats or chills","Orthostatic intolerance / dizziness","Temperature regulation problems",
+    "Heart palpitations","Speech problems","Temporary paralysis","Short-term memory problems",
+    "Sore throat","Swollen and painful glands","Tinnitus (ringing in ears)",
+    "Trembling / limb instability","Word-finding problems"
   ];
 
-  // Load-type mapping from your table
   const LOAD_MAP = {
-    "Brain fog":                             { physical:false, cognitive:true,  emotional:false, sensory:true  },
-    "Burning sensation on skin":             { physical:true,  cognitive:false, emotional:false, sensory:true  },
-    "Chronic pain (muscular or joint)":      { physical:true,  cognitive:false, emotional:true,  sensory:true  },
-    "Cognitive dysfunction":                 { physical:false, cognitive:true,  emotional:false, sensory:false },
-    "Disturbed sleep pattern":               { physical:true,  cognitive:true,  emotional:true,  sensory:false },
-    "Eye symptoms":                          { physical:true,  cognitive:false, emotional:false, sensory:true  },
-    "Flu-like feelings":                     { physical:true,  cognitive:false, emotional:false, sensory:true  },
-    "Headaches and migraines":               { physical:true,  cognitive:true,  emotional:false, sensory:true  },
-    "Heaviness in limbs or whole body":      { physical:true,  cognitive:false, emotional:false, sensory:true  },
-    "Heightened sensory sensitivity":        { physical:false, cognitive:true,  emotional:true,  sensory:true  },
-    "Increased chronic fatigue":             { physical:true,  cognitive:true,  emotional:true,  sensory:false },
-    "Loss of appetite":                      { physical:true,  cognitive:false, emotional:false, sensory:true  },
-    "Loss of stamina / functional capacity": { physical:true,  cognitive:true,  emotional:true,  sensory:false },
-    "Muscle fatigue and weakness":           { physical:true,  cognitive:false, emotional:false, sensory:false },
-    "Nausea":                                { physical:true,  cognitive:false, emotional:false, sensory:true  },
-    "Night sweats or chills":                { physical:true,  cognitive:false, emotional:false, sensory:true  },
-    "Orthostatic intolerance / dizziness":   { physical:true,  cognitive:true,  emotional:false, sensory:true  },
-    "Temperature regulation problems":       { physical:true,  cognitive:false, emotional:false, sensory:true  },
-    "Heart palpitations":                    { physical:true,  cognitive:false, emotional:true,  sensory:true  },
-    "Speech problems":                       { physical:true,  cognitive:true,  emotional:false, sensory:false },
-    "Temporary paralysis":                   { physical:true,  cognitive:true,  emotional:true,  sensory:false },
-    "Short-term memory problems":            { physical:false, cognitive:true,  emotional:false, sensory:false },
-    "Sore throat":                           { physical:true,  cognitive:false, emotional:false, sensory:true  },
-    "Swollen and painful glands":            { physical:true,  cognitive:false, emotional:false, sensory:true  },
-    "Tinnitus (ringing in ears)":            { physical:false, cognitive:true,  emotional:false, sensory:true  },
-    "Trembling / limb instability":          { physical:true,  cognitive:false, emotional:false, sensory:true  },
-    "Word-finding problems":                 { physical:false, cognitive:true,  emotional:false, sensory:false }
+    "Brain fog":{physical:false,cognitive:true,emotional:false,sensory:true},
+    "Burning sensation on skin":{physical:true,cognitive:false,emotional:false,sensory:true},
+    "Chronic pain (muscular or joint)":{physical:true,cognitive:false,emotional:true,sensory:true},
+    "Cognitive dysfunction":{physical:false,cognitive:true,emotional:false,sensory:false},
+    "Disturbed sleep pattern":{physical:true,cognitive:true,emotional:true,sensory:false},
+    "Eye symptoms":{physical:true,cognitive:false,emotional:false,sensory:true},
+    "Flu-like feelings":{physical:true,cognitive:false,emotional:false,sensory:true},
+    "Headaches and migraines":{physical:true,cognitive:true,emotional:false,sensory:true},
+    "Heaviness in limbs or whole body":{physical:true,cognitive:false,emotional:false,sensory:true},
+    "Heightened sensory sensitivity":{physical:false,cognitive:true,emotional:true,sensory:true},
+    "Increased chronic fatigue":{physical:true,cognitive:true,emotional:true,sensory:false},
+    "Loss of appetite":{physical:true,cognitive:false,emotional:false,sensory:true},
+    "Loss of stamina / functional capacity":{physical:true,cognitive:true,emotional:true,sensory:false},
+    "Muscle fatigue and weakness":{physical:true,cognitive:false,emotional:false,sensory:false},
+    "Nausea":{physical:true,cognitive:false,emotional:false,sensory:true},
+    "Night sweats or chills":{physical:true,cognitive:false,emotional:false,sensory:true},
+    "Orthostatic intolerance / dizziness":{physical:true,cognitive:true,emotional:false,sensory:true},
+    "Temperature regulation problems":{physical:true,cognitive:false,emotional:false,sensory:true},
+    "Heart palpitations":{physical:true,cognitive:false,emotional:true,sensory:true},
+    "Speech problems":{physical:true,cognitive:true,emotional:false,sensory:false},
+    "Temporary paralysis":{physical:true,cognitive:true,emotional:true,sensory:false},
+    "Short-term memory problems":{physical:false,cognitive:true,emotional:false,sensory:false},
+    "Sore throat":{physical:true,cognitive:false,emotional:false,sensory:true},
+    "Swollen and painful glands":{physical:true,cognitive:false,emotional:false,sensory:true},
+    "Tinnitus (ringing in ears)":{physical:false,cognitive:true,emotional:false,sensory:true},
+    "Trembling / limb instability":{physical:true,cognitive:false,emotional:false,sensory:true},
+    "Word-finding problems":{physical:false,cognitive:true,emotional:false,sensory:false}
   };
 
-  function renderSymptoms(prefillSymptomsRated = null) {
+  function renderSymptoms(prefillSymptomsRated) {
     const root = document.getElementById("symptomList");
     root.innerHTML = "";
+
+    const pre = (prefillSymptomsRated && typeof prefillSymptomsRated === "object") ? prefillSymptomsRated : {};
 
     SYMPTOMS.forEach((name, i) => {
       const id = `sym_${i}`;
       const row = document.createElement("div");
       row.className = "symptomRow";
 
-      // Prefill state
-      const hasPrefill = prefillSymptomsRated && Object.prototype.hasOwnProperty.call(prefillSymptomsRated, name);
-      const preChecked = !!hasPrefill;
-      const preRating = hasPrefill ? Number(prefillSymptomsRated[name]) : 5;
+      const has = Object.prototype.hasOwnProperty.call(pre, name);
+      const checked = !!has;
+      const rating = has ? Number(pre[name]) : 5;
 
       row.innerHTML = `
         <div class="symptomTop">
           <label class="symptomName" for="${id}_chk">${name}</label>
-          <input id="${id}_chk" type="checkbox" ${preChecked ? "checked" : ""} />
+          <input id="${id}_chk" type="checkbox" ${checked ? "checked" : ""} />
         </div>
-        <div class="symptomControls" id="${id}_controls" style="display:${preChecked ? "block" : "none"};">
+        <div class="symptomControls" id="${id}_controls" style="display:${checked ? "block" : "none"};">
           <div class="sliderWrap">
-            <span class="badge" id="${id}_val">${preRating}</span>
-            <input id="${id}_range" type="range" min="1" max="10" step="1" value="${preRating}" />
+            <span class="badge" id="${id}_val">${rating}</span>
+            <input id="${id}_range" type="range" min="1" max="10" step="1" value="${rating}" />
           </div>
           <div class="tiny">1 = mild, 10 = worst</div>
         </div>
@@ -212,14 +200,9 @@
 
   function collectSymptomRatings() {
     const out = {};
-    const rows = document.querySelectorAll("#symptomList .symptomRow");
-    rows.forEach((row, i) => {
-      const name = SYMPTOMS[i];
+    document.querySelectorAll("#symptomList .symptomRow").forEach((row, i) => {
       const checked = row.querySelector("input[type='checkbox']").checked;
-      if (checked) {
-        const rating = row.querySelector("input[type='range']").value;
-        out[name] = Number(rating);
-      }
+      if (checked) out[SYMPTOMS[i]] = Number(row.querySelector("input[type='range']").value);
     });
     return out;
   }
@@ -231,7 +214,6 @@
     for (const [name, rating] of Object.entries(symptomsRated)) {
       const map = LOAD_MAP[name];
       if (!map) continue;
-
       if (map.physical)  { totals.physical  += rating; counts.physical  += 1; }
       if (map.cognitive) { totals.cognitive += rating; counts.cognitive += 1; }
       if (map.emotional) { totals.emotional += rating; counts.emotional += 1; }
@@ -245,34 +227,47 @@
     const symptomsRated = collectSymptomRatings();
     const { totals, counts } = computeLoadFromSymptoms(symptomsRated);
 
-    document.getElementById("lp_phys").textContent   = totals.physical;
-    document.getElementById("lp_cog").textContent    = totals.cognitive;
-    document.getElementById("lp_emo").textContent    = totals.emotional;
-    document.getElementById("lp_sens").textContent   = totals.sensory;
+    lp_phys.textContent = totals.physical;
+    lp_cog.textContent = totals.cognitive;
+    lp_emo.textContent = totals.emotional;
+    lp_sens.textContent = totals.sensory;
 
-    document.getElementById("lp_phys_n").textContent = counts.physical;
-    document.getElementById("lp_cog_n").textContent  = counts.cognitive;
-    document.getElementById("lp_emo_n").textContent  = counts.emotional;
-    document.getElementById("lp_sens_n").textContent = counts.sensory;
+    lp_phys_n.textContent = counts.physical;
+    lp_cog_n.textContent = counts.cognitive;
+    lp_emo_n.textContent = counts.emotional;
+    lp_sens_n.textContent = counts.sensory;
   }
 
   window.addEventListener("DOMContentLoaded", () => {
-    // wire form action
-    const form = document.getElementById("sinkForm");
-    form.action = WEB_APP_URL;
+    // Wire form action
+    sinkForm.action = WEB_APP_URL;
 
-    // Decide whether to prefill
-    const last = loadLastEntryForToday();
     const banner = document.getElementById("prefillBanner");
+    const prefillText = document.getElementById("prefillText");
+    const prefillDebug = document.getElementById("prefillDebug");
+    const clearBtn = document.getElementById("clearPrefill");
+
+    const last = loadLastEntryForToday();
+
+    banner.style.display = "block";
 
     if (last && last.payload) {
-      banner.style.display = "block";
-      banner.textContent = `Prefilled from your last entry today (saved ${new Date(last.saved_at).toLocaleTimeString()}).`;
-      document.getElementById("notes").value = last.payload.notes || "";
-      renderSymptoms(last.payload.symptoms_rated || {});
+      const symptomsRated = last.payload.symptoms_rated || {};
+      const n = Object.keys(symptomsRated).length;
+
+      prefillText.textContent = `Prefilled from your last entry today (${new Date(last.saved_at).toLocaleTimeString()}).`;
+      prefillDebug.textContent = `Loaded ${n} symptom ratings from localStorage key "${STORAGE_KEY}".`;
+      clearBtn.style.display = "inline";
+      clearBtn.onclick = () => { clearTodayPrefill(); location.reload(); };
+
+      notes.value = last.payload.notes || "";
+      renderSymptoms(symptomsRated);
     } else {
-      banner.style.display = "block";
-      banner.textContent = "Blank form (first log of the day).";
+      prefillText.textContent = "Blank form (first log of the day).";
+      prefillDebug.textContent = `No saved entry for today in localStorage key "${STORAGE_KEY}".`;
+      clearBtn.style.display = "none";
+
+      notes.value = "";
       renderSymptoms(null);
     }
   });
@@ -289,23 +284,19 @@
       symptoms_rated,
       load_totals: totals,
       load_counts: counts,
-      notes: document.getElementById("notes").value
+      notes: notes.value
     };
 
-    // Save locally for same-day prefill (only after we submit)
+    // Save locally for same-day prefill
     saveLastEntryForToday(payload);
 
     // Submit to Apps Script
-    document.getElementById("payloadField").value = JSON.stringify(payload);
-    const form = document.getElementById("sinkForm");
-    form.action = WEB_APP_URL; // ensure
-    form.submit();
+    payloadField.value = JSON.stringify(payload);
+    sinkForm.action = WEB_APP_URL;
+    sinkForm.submit();
 
-    // We can’t reliably confirm write from iframe (cross-origin), so we show "Sent"
     status.className = "status ok";
     status.textContent = "Sent ✅";
-
-    // Keep notes (since prefill is the point). If you want, we can stop clearing it entirely.
   });
 </script>
 </body>
