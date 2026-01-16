@@ -25,23 +25,23 @@
     .loadPreview { margin-top: 10px; padding: 10px; border: 1px dashed #ddd; border-radius: 12px; }
     .loadGrid { display:grid; grid-template-columns: 1fr 1fr; gap: 8px; }
     .loadItem { font-size: 14px; color:#333; }
-    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
   </style>
 </head>
 <body>
   <h2>PEM Symptom Log</h2>
-  <p class="sub">Toggle symptoms you have, rate 1–10. Load types are auto-derived.</p>
+  <p class="sub">Toggle symptoms you have, rate 1–10. Load types are auto-derived from selections.</p>
 
   <label>Symptoms</label>
   <div id="symptomList"></div>
 
-  <div class="loadPreview">
+  <div class="loadPreview" aria-live="polite">
     <div class="tiny">Auto load summary</div>
     <div class="loadGrid">
-      <div class="loadItem">Physical: <span class="mono" id="lp_phys">0</span> (n <span class="mono" id="lp_phys_n">0</span>)</div>
-      <div class="loadItem">Cognitive: <span class="mono" id="lp_cog">0</span> (n <span class="mono" id="lp_cog_n">0</span>)</div>
-      <div class="loadItem">Emotional: <span class="mono" id="lp_emo">0</span> (n <span class="mono" id="lp_emo_n">0</span>)</div>
-      <div class="loadItem">Sensory: <span class="mono" id="lp_sens">0</span> (n <span class="mono" id="lp_sens_n">0</span>)</div>
+      <div class="loadItem">Physical: <span class="mono" id="lp_phys">0</span> (count <span class="mono" id="lp_phys_n">0</span>)</div>
+      <div class="loadItem">Cognitive: <span class="mono" id="lp_cog">0</span> (count <span class="mono" id="lp_cog_n">0</span>)</div>
+      <div class="loadItem">Emotional: <span class="mono" id="lp_emo">0</span> (count <span class="mono" id="lp_emo_n">0</span>)</div>
+      <div class="loadItem">Sensory: <span class="mono" id="lp_sens">0</span> (count <span class="mono" id="lp_sens_n">0</span>)</div>
     </div>
   </div>
 
@@ -50,151 +50,168 @@
 
   <button id="submit" type="button">Save Entry</button>
   <div class="status" id="status"></div>
+  <div class="tiny">Tip: Add this page to your home screen for one-tap logging.</div>
 
-  <!-- Hidden iframe + form -->
+  <!-- hidden iframe + form (CORS-proof) -->
   <iframe id="sink" name="sink" style="display:none;"></iframe>
   <form id="sinkForm" method="POST" target="sink" style="display:none;">
     <input type="hidden" name="payload" id="payloadField" value="">
   </form>
 
 <script>
-const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwoK7AhZYc3Xkw03A3P293AQJDuMgh2krJqup-IoIwD2E_5xMFL5QT4_E6qJeJ8-Vvk/exec"; // MUST END IN /exec
+  // ✅ PASTE YOUR *REAL* /exec URL HERE:
+  const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxyqzXjqB5oixLURSjfkD3reB2uiXBO3aNHXIMhUc4XKuaNaPIbGAzKAY5JGLnvsJzQ/exec";
 
-const SYMPTOMS = [
-  "Brain fog","Burning sensation on skin","Chronic pain (muscular or joint)",
-  "Cognitive dysfunction","Disturbed sleep pattern","Eye symptoms",
-  "Flu-like feelings","Headaches and migraines","Heaviness in limbs or whole body",
-  "Heightened sensory sensitivity","Increased chronic fatigue","Loss of appetite",
-  "Loss of stamina / functional capacity","Muscle fatigue and weakness","Nausea",
-  "Night sweats or chills","Orthostatic intolerance / dizziness","Temperature regulation problems",
-  "Heart palpitations","Speech problems","Temporary paralysis","Short-term memory problems",
-  "Sore throat","Swollen and painful glands","Tinnitus (ringing in ears)",
-  "Trembling / limb instability","Word-finding problems"
-];
+  const SYMPTOMS = [
+    "Brain fog","Burning sensation on skin","Chronic pain (muscular or joint)","Cognitive dysfunction",
+    "Disturbed sleep pattern","Eye symptoms","Flu-like feelings","Headaches and migraines",
+    "Heaviness in limbs or whole body","Heightened sensory sensitivity","Increased chronic fatigue",
+    "Loss of appetite","Loss of stamina / functional capacity","Muscle fatigue and weakness","Nausea",
+    "Night sweats or chills","Orthostatic intolerance / dizziness","Temperature regulation problems",
+    "Heart palpitations","Speech problems","Temporary paralysis","Short-term memory problems",
+    "Sore throat","Swollen and painful glands","Tinnitus (ringing in ears)",
+    "Trembling / limb instability","Word-finding problems"
+  ];
 
-const LOAD_MAP = {
-  "Brain fog":{physical:false,cognitive:true,emotional:false,sensory:true},
-  "Burning sensation on skin":{physical:true,cognitive:false,emotional:false,sensory:true},
-  "Chronic pain (muscular or joint)":{physical:true,cognitive:false,emotional:true,sensory:true},
-  "Cognitive dysfunction":{physical:false,cognitive:true,emotional:false,sensory:false},
-  "Disturbed sleep pattern":{physical:true,cognitive:true,emotional:true,sensory:false},
-  "Eye symptoms":{physical:true,cognitive:false,emotional:false,sensory:true},
-  "Flu-like feelings":{physical:true,cognitive:false,emotional:false,sensory:true},
-  "Headaches and migraines":{physical:true,cognitive:true,emotional:false,sensory:true},
-  "Heaviness in limbs or whole body":{physical:true,cognitive:false,emotional:false,sensory:true},
-  "Heightened sensory sensitivity":{physical:false,cognitive:true,emotional:true,sensory:true},
-  "Increased chronic fatigue":{physical:true,cognitive:true,emotional:true,sensory:false},
-  "Loss of appetite":{physical:true,cognitive:false,emotional:false,sensory:true},
-  "Loss of stamina / functional capacity":{physical:true,cognitive:true,emotional:true,sensory:false},
-  "Muscle fatigue and weakness":{physical:true,cognitive:false,emotional:false,sensory:false},
-  "Nausea":{physical:true,cognitive:false,emotional:false,sensory:true},
-  "Night sweats or chills":{physical:true,cognitive:false,emotional:false,sensory:true},
-  "Orthostatic intolerance / dizziness":{physical:true,cognitive:true,emotional:false,sensory:true},
-  "Temperature regulation problems":{physical:true,cognitive:false,emotional:false,sensory:true},
-  "Heart palpitations":{physical:true,cognitive:false,emotional:true,sensory:true},
-  "Speech problems":{physical:true,cognitive:true,emotional:false,sensory:false},
-  "Temporary paralysis":{physical:true,cognitive:true,emotional:true,sensory:false},
-  "Short-term memory problems":{physical:false,cognitive:true,emotional:false,sensory:false},
-  "Sore throat":{physical:true,cognitive:false,emotional:false,sensory:true},
-  "Swollen and painful glands":{physical:true,cognitive:false,emotional:false,sensory:true},
-  "Tinnitus (ringing in ears)":{physical:false,cognitive:true,emotional:false,sensory:true},
-  "Trembling / limb instability":{physical:true,cognitive:false,emotional:false,sensory:true},
-  "Word-finding problems":{physical:false,cognitive:true,emotional:false,sensory:false}
-};
+  const LOAD_MAP = {
+    "Brain fog": { physical:false, cognitive:true,  emotional:false, sensory:true  },
+    "Burning sensation on skin": { physical:true,  cognitive:false, emotional:false, sensory:true  },
+    "Chronic pain (muscular or joint)": { physical:true,  cognitive:false, emotional:true,  sensory:true  },
+    "Cognitive dysfunction": { physical:false, cognitive:true,  emotional:false, sensory:false },
+    "Disturbed sleep pattern": { physical:true,  cognitive:true,  emotional:true,  sensory:false },
+    "Eye symptoms": { physical:true,  cognitive:false, emotional:false, sensory:true  },
+    "Flu-like feelings": { physical:true,  cognitive:false, emotional:false, sensory:true  },
+    "Headaches and migraines": { physical:true,  cognitive:true,  emotional:false, sensory:true  },
+    "Heaviness in limbs or whole body": { physical:true,  cognitive:false, emotional:false, sensory:true  },
+    "Heightened sensory sensitivity": { physical:false, cognitive:true,  emotional:true,  sensory:true  },
+    "Increased chronic fatigue": { physical:true,  cognitive:true,  emotional:true,  sensory:false },
+    "Loss of appetite": { physical:true,  cognitive:false, emotional:false, sensory:true  },
+    "Loss of stamina / functional capacity": { physical:true,  cognitive:true,  emotional:true,  sensory:false },
+    "Muscle fatigue and weakness": { physical:true,  cognitive:false, emotional:false, sensory:false },
+    "Nausea": { physical:true,  cognitive:false, emotional:false, sensory:true  },
+    "Night sweats or chills": { physical:true,  cognitive:false, emotional:false, sensory:true  },
+    "Orthostatic intolerance / dizziness": { physical:true,  cognitive:true,  emotional:false, sensory:true  },
+    "Temperature regulation problems": { physical:true,  cognitive:false, emotional:false, sensory:true  },
+    "Heart palpitations": { physical:true,  cognitive:false, emotional:true,  sensory:true  },
+    "Speech problems": { physical:true,  cognitive:true,  emotional:false, sensory:false },
+    "Temporary paralysis": { physical:true,  cognitive:true,  emotional:true,  sensory:false },
+    "Short-term memory problems": { physical:false, cognitive:true,  emotional:false, sensory:false },
+    "Sore throat": { physical:true,  cognitive:false, emotional:false, sensory:true  },
+    "Swollen and painful glands": { physical:true,  cognitive:false, emotional:false, sensory:true  },
+    "Tinnitus (ringing in ears)": { physical:false, cognitive:true,  emotional:false, sensory:true  },
+    "Trembling / limb instability": { physical:true,  cognitive:false, emotional:false, sensory:true  },
+    "Word-finding problems": { physical:false, cognitive:true,  emotional:false, sensory:false }
+  };
 
-function renderSymptoms() {
-  const root = document.getElementById("symptomList");
-  root.innerHTML = "";
-
-  SYMPTOMS.forEach((name, i) => {
-    const id = `sym_${i}`;
-    const row = document.createElement("div");
-    row.className = "symptomRow";
-    row.innerHTML = `
-      <div class="symptomTop">
-        <label class="symptomName">${name}</label>
-        <input id="${id}_chk" type="checkbox" />
-      </div>
-      <div class="symptomControls" id="${id}_controls">
-        <div class="sliderWrap">
-          <span class="badge" id="${id}_val">5</span>
-          <input id="${id}_range" type="range" min="1" max="10" value="5" />
+  function renderSymptoms() {
+    const root = document.getElementById("symptomList");
+    root.innerHTML = "";
+    SYMPTOMS.forEach((name, i) => {
+      const id = `sym_${i}`;
+      const row = document.createElement("div");
+      row.className = "symptomRow";
+      row.innerHTML = `
+        <div class="symptomTop">
+          <label class="symptomName" for="${id}_chk">${name}</label>
+          <input id="${id}_chk" type="checkbox" />
         </div>
-      </div>
-    `;
-    root.appendChild(row);
+        <div class="symptomControls" id="${id}_controls">
+          <div class="sliderWrap">
+            <span class="badge" id="${id}_val">5</span>
+            <input id="${id}_range" type="range" min="1" max="10" step="1" value="5" />
+          </div>
+          <div class="tiny">1 = mild, 10 = worst</div>
+        </div>
+      `;
+      root.appendChild(row);
 
-    const chk = row.querySelector(`#${id}_chk`);
-    const controls = row.querySelector(`#${id}_controls`);
-    const range = row.querySelector(`#${id}_range`);
-    const val = row.querySelector(`#${id}_val`);
+      const chk = row.querySelector(`#${id}_chk`);
+      const controls = row.querySelector(`#${id}_controls`);
+      const range = row.querySelector(`#${id}_range`);
+      const val = row.querySelector(`#${id}_val`);
 
-    chk.onchange = () => { controls.style.display = chk.checked ? "block" : "none"; updateLoadPreview(); };
-    range.oninput = () => { val.textContent = range.value; updateLoadPreview(); };
-  });
-}
-
-function collectSymptomRatings() {
-  const out = {};
-  document.querySelectorAll("#symptomList .symptomRow").forEach((row, i) => {
-    if (row.querySelector("input[type='checkbox']").checked) {
-      out[SYMPTOMS[i]] = Number(row.querySelector("input[type='range']").value);
-    }
-  });
-  return out;
-}
-
-function computeLoad(symptomsRated) {
-  const totals = {physical:0,cognitive:0,emotional:0,sensory:0};
-  const counts = {physical:0,cognitive:0,emotional:0,sensory:0};
-
-  for (const [name, rating] of Object.entries(symptomsRated)) {
-    const m = LOAD_MAP[name];
-    if (!m) continue;
-    if (m.physical){ totals.physical+=rating; counts.physical++; }
-    if (m.cognitive){ totals.cognitive+=rating; counts.cognitive++; }
-    if (m.emotional){ totals.emotional+=rating; counts.emotional++; }
-    if (m.sensory){ totals.sensory+=rating; counts.sensory++; }
+      chk.addEventListener("change", () => {
+        controls.style.display = chk.checked ? "block" : "none";
+        updateLoadPreview();
+      });
+      range.addEventListener("input", () => {
+        val.textContent = range.value;
+        updateLoadPreview();
+      });
+    });
+    updateLoadPreview();
   }
-  return { totals, counts };
-}
 
-function updateLoadPreview() {
-  const { totals, counts } = computeLoad(collectSymptomRatings());
-  lp_phys.textContent = totals.physical;
-  lp_cog.textContent = totals.cognitive;
-  lp_emo.textContent = totals.emotional;
-  lp_sens.textContent = totals.sensory;
-  lp_phys_n.textContent = counts.physical;
-  lp_cog_n.textContent = counts.cognitive;
-  lp_emo_n.textContent = counts.emotional;
-  lp_sens_n.textContent = counts.sensory;
-}
+  function collectSymptomRatings() {
+    const out = {};
+    document.querySelectorAll("#symptomList .symptomRow").forEach((row, i) => {
+      const checked = row.querySelector("input[type='checkbox']").checked;
+      if (checked) out[SYMPTOMS[i]] = Number(row.querySelector("input[type='range']").value);
+    });
+    return out;
+  }
 
-window.onload = () => {
-  renderSymptoms();
-  document.getElementById("sinkForm").action = WEB_APP_URL;
-};
+  function computeLoad(symptomsRated) {
+    const totals = { physical:0, cognitive:0, emotional:0, sensory:0 };
+    const counts = { physical:0, cognitive:0, emotional:0, sensory:0 };
+    for (const [name, rating] of Object.entries(symptomsRated)) {
+      const m = LOAD_MAP[name];
+      if (!m) continue;
+      if (m.physical){ totals.physical += rating; counts.physical++; }
+      if (m.cognitive){ totals.cognitive += rating; counts.cognitive++; }
+      if (m.emotional){ totals.emotional += rating; counts.emotional++; }
+      if (m.sensory){ totals.sensory += rating; counts.sensory++; }
+    }
+    return { totals, counts };
+  }
 
-document.getElementById("submit").onclick = () => {
-  const status = document.getElementById("status");
-  status.textContent = "Saving…";
-  status.className = "status";
+  function updateLoadPreview() {
+    const { totals, counts } = computeLoad(collectSymptomRatings());
+    lp_phys.textContent = totals.physical;
+    lp_cog.textContent = totals.cognitive;
+    lp_emo.textContent = totals.emotional;
+    lp_sens.textContent = totals.sensory;
+    lp_phys_n.textContent = counts.physical;
+    lp_cog_n.textContent = counts.cognitive;
+    lp_emo_n.textContent = counts.emotional;
+    lp_sens_n.textContent = counts.sensory;
+  }
 
-  const symptoms_rated = collectSymptomRatings();
-  const { totals, counts } = computeLoad(symptoms_rated);
+  window.addEventListener("DOMContentLoaded", () => {
+    document.getElementById("sinkForm").action = WEB_APP_URL;
+    renderSymptoms();
+  });
 
-  const payload = { symptoms_rated, load_totals: totals, load_counts: counts, notes: notes.value };
+  // IMPORTANT: We cannot reliably read iframe text cross-origin.
+  // So we verify success using Apps Script Executions + Sheet row.
+  document.getElementById("submit").addEventListener("click", () => {
+    const status = document.getElementById("status");
+    status.className = "status";
+    status.textContent = "Saving…";
 
-  payloadField.value = JSON.stringify(payload);
-  sinkForm.submit();
+    const symptoms_rated = collectSymptomRatings();
+    const { totals, counts } = computeLoad(symptoms_rated);
 
-  setTimeout(() => {
-    status.textContent = "Saved ✅";
-    status.className = "status ok";
-    notes.value = "";
-  }, 800);
-};
+    const payload = {
+      symptoms_rated,
+      load_totals: totals,
+      load_counts: counts,
+      notes: document.getElementById("notes").value
+    };
+
+    payloadField.value = JSON.stringify(payload);
+
+    // Force action to be correct right now
+    sinkForm.action = WEB_APP_URL;
+    sinkForm.submit();
+
+    // Don’t lie: show “Sent” first, not “Saved”
+    setTimeout(() => {
+      status.className = "status ok";
+      status.textContent = "Sent ✅ (check sheet)";
+      notes.value = "";
+    }, 600);
+  });
 </script>
 </body>
 </html>
