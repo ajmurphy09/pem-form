@@ -15,7 +15,6 @@
     .bad { color: #b00020; }
     .tiny { font-size: 13px; color: #666; margin-top: 8px; }
 
-    /* Symptom toggle + rating UI */
     .symptomRow { border: 1px solid #ddd; border-radius: 14px; padding: 10px; margin-top: 10px; }
     .symptomTop { display:flex; align-items:flex-start; justify-content:space-between; gap: 10px; }
     .symptomName { font-weight: 700; line-height: 1.2; }
@@ -26,7 +25,7 @@
     .loadPreview { margin-top: 10px; padding: 10px; border: 1px dashed #ddd; border-radius: 12px; }
     .loadGrid { display:grid; grid-template-columns: 1fr 1fr; gap: 8px; }
     .loadItem { font-size: 14px; color:#333; }
-    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+    .mono { font-family: ui-monospace, monospace; }
   </style>
 </head>
 <body>
@@ -37,14 +36,13 @@
   <div id="symptomList"></div>
 
   <div class="loadPreview" id="loadPreview" aria-live="polite">
-    <div class="tiny">Auto load summary (updates as you select symptoms)</div>
+    <div class="tiny">Auto load summary</div>
     <div class="loadGrid">
       <div class="loadItem">Physical: <span class="mono" id="lp_phys">0</span> (count <span class="mono" id="lp_phys_n">0</span>)</div>
       <div class="loadItem">Cognitive: <span class="mono" id="lp_cog">0</span> (count <span class="mono" id="lp_cog_n">0</span>)</div>
       <div class="loadItem">Emotional: <span class="mono" id="lp_emo">0</span> (count <span class="mono" id="lp_emo_n">0</span>)</div>
       <div class="loadItem">Sensory: <span class="mono" id="lp_sens">0</span> (count <span class="mono" id="lp_sens_n">0</span>)</div>
     </div>
-    <div class="tiny">Scores are the sum of ratings for symptoms tagged to that load type.</div>
   </div>
 
   <label>Notes (optional)</label>
@@ -55,10 +53,8 @@
   <div class="tiny">Tip: Add this page to your home screen for one-tap logging.</div>
 
 <script>
-  // Your Apps Script Web App URL (ends with /exec):
   const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyDYb8dRkZjYNt42fqZIe_zaQp1YwuQDw9N1OsowXHaMhuy3rh5USC9F03_S-5tS8tX/exec";
 
-  // Canonical symptom labels (match your table)
   const SYMPTOMS = [
     "Brain fog",
     "Burning sensation on skin",
@@ -89,35 +85,34 @@
     "Word-finding problems"
   ];
 
-  // Load-type mapping from your table
   const LOAD_MAP = {
-    "Brain fog":                             { physical:false, cognitive:true,  emotional:false, sensory:true  },
-    "Burning sensation on skin":             { physical:true,  cognitive:false, emotional:false, sensory:true  },
-    "Chronic pain (muscular or joint)":      { physical:true,  cognitive:false, emotional:true,  sensory:true  },
-    "Cognitive dysfunction":                 { physical:false, cognitive:true,  emotional:false, sensory:false },
-    "Disturbed sleep pattern":               { physical:true,  cognitive:true,  emotional:true,  sensory:false },
-    "Eye symptoms":                          { physical:true,  cognitive:false, emotional:false, sensory:true  },
-    "Flu-like feelings":                     { physical:true,  cognitive:false, emotional:false, sensory:true  },
-    "Headaches and migraines":               { physical:true,  cognitive:true,  emotional:false, sensory:true  },
-    "Heaviness in limbs or whole body":      { physical:true,  cognitive:false, emotional:false, sensory:true  },
-    "Heightened sensory sensitivity":        { physical:false, cognitive:true,  emotional:true,  sensory:true  },
-    "Increased chronic fatigue":             { physical:true,  cognitive:true,  emotional:true,  sensory:false },
-    "Loss of appetite":                      { physical:true,  cognitive:false, emotional:false, sensory:true  },
-    "Loss of stamina / functional capacity": { physical:true,  cognitive:true,  emotional:true,  sensory:false },
-    "Muscle fatigue and weakness":           { physical:true,  cognitive:false, emotional:false, sensory:false },
-    "Nausea":                                { physical:true,  cognitive:false, emotional:false, sensory:true  },
-    "Night sweats or chills":                { physical:true,  cognitive:false, emotional:false, sensory:true  },
-    "Orthostatic intolerance / dizziness":   { physical:true,  cognitive:true,  emotional:false, sensory:true  },
-    "Temperature regulation problems":       { physical:true,  cognitive:false, emotional:false, sensory:true  },
-    "Heart palpitations":                    { physical:true,  cognitive:false, emotional:true,  sensory:true  },
-    "Speech problems":                       { physical:true,  cognitive:true,  emotional:false, sensory:false },
-    "Temporary paralysis":                   { physical:true,  cognitive:true,  emotional:true,  sensory:false },
-    "Short-term memory problems":            { physical:false, cognitive:true,  emotional:false, sensory:false },
-    "Sore throat":                           { physical:true,  cognitive:false, emotional:false, sensory:true  },
-    "Swollen and painful glands":            { physical:true,  cognitive:false, emotional:false, sensory:true  },
-    "Tinnitus (ringing in ears)":            { physical:false, cognitive:true,  emotional:false, sensory:true  },
-    "Trembling / limb instability":          { physical:true,  cognitive:false, emotional:false, sensory:true  },
-    "Word-finding problems":                 { physical:false, cognitive:true,  emotional:false, sensory:false }
+    "Brain fog": { physical:false, cognitive:true, emotional:false, sensory:true },
+    "Burning sensation on skin": { physical:true, cognitive:false, emotional:false, sensory:true },
+    "Chronic pain (muscular or joint)": { physical:true, cognitive:false, emotional:true, sensory:true },
+    "Cognitive dysfunction": { physical:false, cognitive:true, emotional:false, sensory:false },
+    "Disturbed sleep pattern": { physical:true, cognitive:true, emotional:true, sensory:false },
+    "Eye symptoms": { physical:true, cognitive:false, emotional:false, sensory:true },
+    "Flu-like feelings": { physical:true, cognitive:false, emotional:false, sensory:true },
+    "Headaches and migraines": { physical:true, cognitive:true, emotional:false, sensory:true },
+    "Heaviness in limbs or whole body": { physical:true, cognitive:false, emotional:false, sensory:true },
+    "Heightened sensory sensitivity": { physical:false, cognitive:true, emotional:true, sensory:true },
+    "Increased chronic fatigue": { physical:true, cognitive:true, emotional:true, sensory:false },
+    "Loss of appetite": { physical:true, cognitive:false, emotional:false, sensory:true },
+    "Loss of stamina / functional capacity": { physical:true, cognitive:true, emotional:true, sensory:false },
+    "Muscle fatigue and weakness": { physical:true, cognitive:false, emotional:false, sensory:false },
+    "Nausea": { physical:true, cognitive:false, emotional:false, sensory:true },
+    "Night sweats or chills": { physical:true, cognitive:false, emotional:false, sensory:true },
+    "Orthostatic intolerance / dizziness": { physical:true, cognitive:true, emotional:false, sensory:true },
+    "Temperature regulation problems": { physical:true, cognitive:false, emotional:false, sensory:true },
+    "Heart palpitations": { physical:true, cognitive:false, emotional:true, sensory:true },
+    "Speech problems": { physical:true, cognitive:true, emotional:false, sensory:false },
+    "Temporary paralysis": { physical:true, cognitive:true, emotional:true, sensory:false },
+    "Short-term memory problems": { physical:false, cognitive:true, emotional:false, sensory:false },
+    "Sore throat": { physical:true, cognitive:false, emotional:false, sensory:true },
+    "Swollen and painful glands": { physical:true, cognitive:false, emotional:false, sensory:true },
+    "Tinnitus (ringing in ears)": { physical:false, cognitive:true, emotional:false, sensory:true },
+    "Trembling / limb instability": { physical:true, cognitive:false, emotional:false, sensory:true },
+    "Word-finding problems": { physical:false, cognitive:true, emotional:false, sensory:false }
   };
 
   function renderSymptoms() {
@@ -139,7 +134,6 @@
             <span class="badge" id="${id}_val">5</span>
             <input id="${id}_range" type="range" min="1" max="10" step="1" value="5" />
           </div>
-          <div class="tiny">1 = mild, 10 = worst</div>
         </div>
       `;
 
@@ -186,10 +180,10 @@
       const map = LOAD_MAP[name];
       if (!map) continue;
 
-      if (map.physical)  { totals.physical  += rating; counts.physical  += 1; }
-      if (map.cognitive) { totals.cognitive += rating; counts.cognitive += 1; }
-      if (map.emotional) { totals.emotional += rating; counts.emotional += 1; }
-      if (map.sensory)   { totals.sensory   += rating; counts.sensory   += 1; }
+      if (map.physical)  { totals.physical  += rating; counts.physical++; }
+      if (map.cognitive) { totals.cognitive += rating; counts.cognitive++; }
+      if (map.emotional) { totals.emotional += rating; counts.emotional++; }
+      if (map.sensory)   { totals.sensory   += rating; counts.sensory++; }
     }
 
     return { totals, counts };
@@ -199,15 +193,15 @@
     const symptomsRated = collectSymptomRatings();
     const { totals, counts } = computeLoadFromSymptoms(symptomsRated);
 
-    document.getElementById("lp_phys").textContent   = totals.physical;
-    document.getElementById("lp_cog").textContent    = totals.cognitive;
-    document.getElementById("lp_emo").textContent    = totals.emotional;
-    document.getElementById("lp_sens").textContent   = totals.sensory;
+    lp_phys.textContent = totals.physical;
+    lp_cog.textContent  = totals.cognitive;
+    lp_emo.textContent  = totals.emotional;
+    lp_sens.textContent = totals.sensory;
 
-    document.getElementById("lp_phys_n").textContent = counts.physical;
-    document.getElementById("lp_cog_n").textContent  = counts.cognitive;
-    document.getElementById("lp_emo_n").textContent  = counts.emotional;
-    document.getElementById("lp_sens_n").textContent = counts.sensory;
+    lp_phys_n.textContent = counts.physical;
+    lp_cog_n.textContent  = counts.cognitive;
+    lp_emo_n.textContent  = counts.emotional;
+    lp_sens_n.textContent = counts.sensory;
   }
 
   window.addEventListener("DOMContentLoaded", renderSymptoms);
@@ -228,18 +222,14 @@
     };
 
     try {
-      await fetch(WEB_APP_URL, {
-        method: "POST",
-        mode: "no-cors",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
+      const url = WEB_APP_URL + "?payload=" + encodeURIComponent(JSON.stringify(payload));
+      const res = await fetch(url);
+      const out = await res.json();
 
-      // With no-cors, we can't read the response. If the request was sent, show success.
+      if (!out.ok) throw new Error(out.error || "Unknown error");
+
       status.classList.add("ok");
       status.textContent = "Saved ✅";
-
-      // Optional: clear notes after save
       document.getElementById("notes").value = "";
     } catch (err) {
       status.classList.add("bad");
