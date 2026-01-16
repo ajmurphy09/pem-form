@@ -1,0 +1,40 @@
+<!doctype html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Health Tracker</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Arial; margin: 16px; max-width: 720px; }
+    h2 { margin: 8px 0 2px; }
+    .sub { color: #555; margin: 0 0 16px; }
+    .grid { display:grid; grid-template-columns: 1fr; gap: 12px; }
+    a.card {
+      display:block; padding: 16px; border: 1px solid #ddd; border-radius: 16px;
+      text-decoration:none; color: inherit; background: #fff;
+    }
+    .title { font-weight: 800; font-size: 18px; }
+    .desc { color:#555; margin-top: 6px; font-size: 14px; }
+    .tiny { margin-top: 18px; font-size: 13px; color:#666; }
+  </style>
+</head>
+<body>
+  <h2>Tracker Home</h2>
+  <div class="sub">What would you like to log right now?</div>
+
+  <div class="grid">
+    <a class="card" href="./index.html">
+      <div class="title">PEM Symptom Log</div>
+      <div class="desc">Morning baseline + midday/evening check-ins.</div>
+    </a>
+
+    <a class="card" href="./activity.html">
+      <div class="title">Activity Log</div>
+      <div class="desc">Log physical, cognitive, emotional, and sensory exertion.</div>
+    </a>
+  </div>
+
+  <div class="tiny">
+    Tip: Bookmark this page or add it to your home screen.
+  </div>
+</body>
+</html>
