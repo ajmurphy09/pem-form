@@ -2,16 +2,13 @@
 <html>
 <head>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>PEM Log</title>
+  <title>PEM Symptom Log</title>
   <style>
-    body { font-family: system-ui, -apple-system, Arial; margin: 16px; max-width: 640px; }
+    body { font-family: system-ui, -apple-system, Arial; margin: 16px; max-width: 720px; }
     h2 { margin: 8px 0 2px; }
     .sub { color: #555; margin: 0 0 12px; }
     label { display:block; margin-top: 14px; font-weight: 600; }
-    input, select, textarea, button { width: 100%; font-size: 16px; padding: 10px; margin-top: 6px; }
-    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-    .pillbox { display:flex; flex-wrap:wrap; gap:10px; margin-top:8px; }
-    .pill { display:flex; gap:8px; align-items:center; padding:8px 10px; border:1px solid #ddd; border-radius:999px; }
+    textarea, button { width: 100%; font-size: 16px; padding: 10px; margin-top: 6px; }
     button { margin-top: 18px; font-weight: 800; }
     .status { margin-top: 12px; font-weight: 600; }
     .ok { color: #0a7a2f; }
@@ -26,62 +23,28 @@
     .sliderWrap { display:flex; align-items:center; gap: 10px; }
     .sliderWrap input[type="range"] { width: 100%; padding: 0; }
     .badge { min-width: 34px; text-align:center; font-weight:800; }
+    .loadPreview { margin-top: 10px; padding: 10px; border: 1px dashed #ddd; border-radius: 12px; }
+    .loadGrid { display:grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .loadItem { font-size: 14px; color:#333; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
   </style>
 </head>
 <body>
-  <h2>PEM Log</h2>
-  <p class="sub">Quick check-in (30–45 seconds). Saves to your private Google Sheet.</p>
-
-  <label>PEM severity (0–10)</label>
-  <input id="pem" type="number" min="0" max="10" inputmode="numeric" placeholder="e.g., 6"/>
-
-  <div class="row">
-    <div>
-      <label>Physical load</label>
-      <select id="physical">
-        <option value="">—</option>
-        <option>Low</option><option>Medium</option><option>High</option>
-      </select>
-    </div>
-    <div>
-      <label>Cognitive load</label>
-      <select id="cognitive">
-        <option value="">—</option>
-        <option>Low</option><option>Medium</option><option>High</option>
-      </select>
-    </div>
-  </div>
-
-  <div class="row">
-    <div>
-      <label>Emotional load</label>
-      <select id="emotional">
-        <option value="">—</option>
-        <option>Low</option><option>Medium</option><option>High</option>
-      </select>
-    </div>
-    <div>
-      <label>Sensory load</label>
-      <select id="sensory">
-        <option value="">—</option>
-        <option>Low</option><option>Medium</option><option>High</option>
-      </select>
-    </div>
-  </div>
+  <h2>PEM Symptom Log</h2>
+  <p class="sub">Toggle symptoms you have, rate 1–10. Load types are auto-derived from your symptom selections.</p>
 
   <label>Symptoms (toggle any that apply, then rate 1–10)</label>
   <div id="symptomList"></div>
 
-  <label>Triggers (best guess)</label>
-  <div class="pillbox" id="triggers">
-    <label class="pill"><input type="checkbox" value="Physical exertion">Physical exertion</label>
-    <label class="pill"><input type="checkbox" value="Cognitive exertion">Cognitive exertion</label>
-    <label class="pill"><input type="checkbox" value="Sensory overload">Sensory overload</label>
-    <label class="pill"><input type="checkbox" value="Stress">Stress</label>
-    <label class="pill"><input type="checkbox" value="Poor sleep">Poor sleep</label>
-    <label class="pill"><input type="checkbox" value="Standing">Standing</label>
-    <label class="pill"><input type="checkbox" value="Errands">Errands</label>
-    <label class="pill"><input type="checkbox" value="Unknown">Unknown</label>
+  <div class="loadPreview" id="loadPreview" aria-live="polite">
+    <div class="tiny">Auto load summary (updates as you select symptoms)</div>
+    <div class="loadGrid">
+      <div class="loadItem">Physical: <span class="mono" id="lp_phys">0</span> (count <span class="mono" id="lp_phys_n">0</span>)</div>
+      <div class="loadItem">Cognitive: <span class="mono" id="lp_cog">0</span> (count <span class="mono" id="lp_cog_n">0</span>)</div>
+      <div class="loadItem">Emotional: <span class="mono" id="lp_emo">0</span> (count <span class="mono" id="lp_emo_n">0</span>)</div>
+      <div class="loadItem">Sensory: <span class="mono" id="lp_sens">0</span> (count <span class="mono" id="lp_sens_n">0</span>)</div>
+    </div>
+    <div class="tiny">Scores are the sum of ratings for symptoms tagged to that load type.</div>
   </div>
 
   <label>Notes (optional)</label>
@@ -92,44 +55,71 @@
   <div class="tiny">Tip: Add this page to your home screen for one-tap logging.</div>
 
 <script>
-  // Paste your Apps Script Web App URL here (ends with /exec):
+  // Your Apps Script Web App URL (ends with /exec):
   const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyDYb8dRkZjYNt42fqZIe_zaQp1YwuQDw9N1OsowXHaMhuy3rh5USC9F03_S-5tS8tX/exec";
 
-  // Symptom list (toggle + rate)
+  // Canonical symptom labels (match your table)
   const SYMPTOMS = [
-    "Brain-fog",
+    "Brain fog",
     "Burning sensation on skin",
     "Chronic pain (muscular or joint)",
     "Cognitive dysfunction",
-    "Disturbed sleep pattern (lack of sleep or need to sleep too much often incl. vivid dreams)",
+    "Disturbed sleep pattern",
     "Eye symptoms",
     "Flu-like feelings",
-    "Headaches and Migraines",
-    "Heaviness in the limbs or whole body",
-    "Heightened sensitivity to sensory stimuli (sound, light, smells)",
+    "Headaches and migraines",
+    "Heaviness in limbs or whole body",
+    "Heightened sensory sensitivity",
     "Increased chronic fatigue",
     "Loss of appetite",
-    "Loss of stamina/ functional capacity",
+    "Loss of stamina / functional capacity",
     "Muscle fatigue and weakness",
     "Nausea",
     "Night sweats or chills",
-    "Orthostatic intolerance/dizziness",
-    "Problems regulating temperature (and cold/hot extremities)",
+    "Orthostatic intolerance / dizziness",
+    "Temperature regulation problems",
     "Heart palpitations",
     "Speech problems",
     "Temporary paralysis",
     "Short-term memory problems",
     "Sore throat",
     "Swollen and painful glands",
-    "Tinnitus (ringing in the ears)",
-    "Trembling/ instability of muscle and/or limbs",
+    "Tinnitus (ringing in ears)",
+    "Trembling / limb instability",
     "Word-finding problems"
   ];
 
-  function checkedValues(containerId) {
-    return [...document.querySelectorAll(`#${containerId} input[type="checkbox"]:checked`)]
-      .map(x => x.value);
-  }
+  // Load-type mapping from your table
+  // Each symptom maps to which loads it impacts
+  const LOAD_MAP = {
+    "Brain fog":                             { physical:false, cognitive:true,  emotional:false, sensory:true  },
+    "Burning sensation on skin":             { physical:true,  cognitive:false, emotional:false, sensory:true  },
+    "Chronic pain (muscular or joint)":      { physical:true,  cognitive:false, emotional:true,  sensory:true  },
+    "Cognitive dysfunction":                 { physical:false, cognitive:true,  emotional:false, sensory:false },
+    "Disturbed sleep pattern":               { physical:true,  cognitive:true,  emotional:true,  sensory:false },
+    "Eye symptoms":                          { physical:true,  cognitive:false, emotional:false, sensory:true  },
+    "Flu-like feelings":                     { physical:true,  cognitive:false, emotional:false, sensory:true  },
+    "Headaches and migraines":               { physical:true,  cognitive:true,  emotional:false, sensory:true  },
+    "Heaviness in limbs or whole body":      { physical:true,  cognitive:false, emotional:false, sensory:true  },
+    "Heightened sensory sensitivity":        { physical:false, cognitive:true,  emotional:true,  sensory:true  },
+    "Increased chronic fatigue":             { physical:true,  cognitive:true,  emotional:true,  sensory:false },
+    "Loss of appetite":                      { physical:true,  cognitive:false, emotional:false, sensory:true  },
+    "Loss of stamina / functional capacity": { physical:true,  cognitive:true,  emotional:true,  sensory:false },
+    "Muscle fatigue and weakness":           { physical:true,  cognitive:false, emotional:false, sensory:false },
+    "Nausea":                                { physical:true,  cognitive:false, emotional:false, sensory:true  },
+    "Night sweats or chills":                { physical:true,  cognitive:false, emotional:false, sensory:true  },
+    "Orthostatic intolerance / dizziness":   { physical:true,  cognitive:true,  emotional:false, sensory:true  },
+    "Temperature regulation problems":       { physical:true,  cognitive:false, emotional:false, sensory:true  },
+    "Heart palpitations":                    { physical:true,  cognitive:false, emotional:true,  sensory:true  },
+    "Speech problems":                       { physical:true,  cognitive:true,  emotional:false, sensory:false },
+    "Temporary paralysis":                   { physical:true,  cognitive:true,  emotional:true,  sensory:false },
+    "Short-term memory problems":            { physical:false, cognitive:true,  emotional:false, sensory:false },
+    "Sore throat":                           { physical:true,  cognitive:false, emotional:false, sensory:true  },
+    "Swollen and painful glands":            { physical:true,  cognitive:false, emotional:false, sensory:true  },
+    "Tinnitus (ringing in ears)":            { physical:false, cognitive:true,  emotional:false, sensory:true  },
+    "Trembling / limb instability":          { physical:true,  cognitive:false, emotional:false, sensory:true  },
+    "Word-finding problems":                 { physical:false, cognitive:true,  emotional:false, sensory:false }
+  };
 
   function renderSymptoms() {
     const root = document.getElementById("symptomList");
@@ -163,12 +153,16 @@
 
       chk.addEventListener("change", () => {
         controls.style.display = chk.checked ? "block" : "none";
+        updateLoadPreview();
       });
 
       range.addEventListener("input", () => {
         val.textContent = range.value;
+        updateLoadPreview();
       });
     });
+
+    updateLoadPreview();
   }
 
   function collectSymptomRatings() {
@@ -185,6 +179,38 @@
     return out;
   }
 
+  function computeLoadFromSymptoms(symptomsRated) {
+    const totals = { physical: 0, cognitive: 0, emotional: 0, sensory: 0 };
+    const counts = { physical: 0, cognitive: 0, emotional: 0, sensory: 0 };
+
+    for (const [name, rating] of Object.entries(symptomsRated)) {
+      const map = LOAD_MAP[name];
+      if (!map) continue;
+
+      if (map.physical)  { totals.physical  += rating; counts.physical  += 1; }
+      if (map.cognitive) { totals.cognitive += rating; counts.cognitive += 1; }
+      if (map.emotional) { totals.emotional += rating; counts.emotional += 1; }
+      if (map.sensory)   { totals.sensory   += rating; counts.sensory   += 1; }
+    }
+
+    return { totals, counts };
+  }
+
+  function updateLoadPreview() {
+    const symptomsRated = collectSymptomRatings();
+    const { totals, counts } = computeLoadFromSymptoms(symptomsRated);
+
+    document.getElementById("lp_phys").textContent   = totals.physical;
+    document.getElementById("lp_cog").textContent    = totals.cognitive;
+    document.getElementById("lp_emo").textContent    = totals.emotional;
+    document.getElementById("lp_sens").textContent   = totals.sensory;
+
+    document.getElementById("lp_phys_n").textContent = counts.physical;
+    document.getElementById("lp_cog_n").textContent  = counts.cognitive;
+    document.getElementById("lp_emo_n").textContent  = counts.emotional;
+    document.getElementById("lp_sens_n").textContent = counts.sensory;
+  }
+
   window.addEventListener("DOMContentLoaded", renderSymptoms);
 
   document.getElementById("submit").addEventListener("click", async () => {
@@ -192,14 +218,13 @@
     status.className = "status";
     status.textContent = "Saving…";
 
+    const symptoms_rated = collectSymptomRatings();
+    const { totals, counts } = computeLoadFromSymptoms(symptoms_rated);
+
     const payload = {
-      pem: document.getElementById("pem").value,
-      physical: document.getElementById("physical").value,
-      cognitive: document.getElementById("cognitive").value,
-      emotional: document.getElementById("emotional").value,
-      sensory: document.getElementById("sensory").value,
-      symptoms_rated: collectSymptomRatings(),
-      triggers: checkedValues("triggers"),
+      symptoms_rated,                 // { "Brain fog": 7, ... }
+      load_totals: totals,            // { physical: 14, cognitive: 22, emotional: 9, sensory: 18 }
+      load_counts: counts,            // { physical: 3,  cognitive: 4,  emotional: 2, sensory: 3 }
       notes: document.getElementById("notes").value
     };
 
@@ -226,3 +251,4 @@
 </script>
 </body>
 </html>
+
