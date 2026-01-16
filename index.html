@@ -1,1 +1,141 @@
-const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbymjmXCHKFYkmnI8yO65ezT1ejDTh7gosnZN789rjbXglfn6-u1CdmzGK6lbfYKWwh6/exec";
+<!doctype html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>PEM Log</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Arial; margin: 16px; max-width: 640px; }
+    h2 { margin: 8px 0 2px; }
+    .sub { color: #555; margin: 0 0 12px; }
+    label { display:block; margin-top: 14px; font-weight: 600; }
+    input, select, textarea, button { width: 100%; font-size: 16px; padding: 10px; margin-top: 6px; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .pillbox { display:flex; flex-wrap:wrap; gap:10px; margin-top:8px; }
+    .pill { display:flex; gap:8px; align-items:center; padding:8px 10px; border:1px solid #ddd; border-radius:999px; }
+    button { margin-top: 18px; font-weight: 800; }
+    .status { margin-top: 12px; font-weight: 600; }
+    .ok { color: #0a7a2f; }
+    .bad { color: #b00020; }
+    .tiny { font-size: 13px; color: #666; margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <h2>PEM Log</h2>
+  <p class="sub">Quick check-in (30–45 seconds). Saves to your private Google Sheet.</p>
+
+  <label>PEM severity (0–10)</label>
+  <input id="pem" type="number" min="0" max="10" inputmode="numeric" placeholder="e.g., 6"/>
+
+  <div class="row">
+    <div>
+      <label>Physical load</label>
+      <select id="physical">
+        <option value="">—</option>
+        <option>Low</option><option>Medium</option><option>High</option>
+      </select>
+    </div>
+    <div>
+      <label>Cognitive load</label>
+      <select id="cognitive">
+        <option value="">—</option>
+        <option>Low</option><option>Medium</option><option>High</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="row">
+    <div>
+      <label>Emotional load</label>
+      <select id="emotional">
+        <option value="">—</option>
+        <option>Low</option><option>Medium</option><option>High</option>
+      </select>
+    </div>
+    <div>
+      <label>Sensory load</label>
+      <select id="sensory">
+        <option value="">—</option>
+        <option>Low</option><option>Medium</option><option>High</option>
+      </select>
+    </div>
+  </div>
+
+  <label>Symptoms</label>
+  <div class="pillbox" id="symptoms">
+    <label class="pill"><input type="checkbox" value="Fatigue">Fatigue</label>
+    <label class="pill"><input type="checkbox" value="Brain fog">Brain fog</label>
+    <label class="pill"><input type="checkbox" value="Pain">Pain</label>
+    <label class="pill"><input type="checkbox" value="Flu-like">Flu-like</label>
+    <label class="pill"><input type="checkbox" value="Headache">Headache</label>
+    <label class="pill"><input type="checkbox" value="Light sensitivity">Light sensitivity</label>
+    <label class="pill"><input type="checkbox" value="Sound sensitivity">Sound sensitivity</label>
+    <label class="pill"><input type="checkbox" value="GI symptoms">GI symptoms</label>
+  </div>
+
+  <label>Triggers (best guess)</label>
+  <div class="pillbox" id="triggers">
+    <label class="pill"><input type="checkbox" value="Physical exertion">Physical exertion</label>
+    <label class="pill"><input type="checkbox" value="Cognitive exertion">Cognitive exertion</label>
+    <label class="pill"><input type="checkbox" value="Sensory overload">Sensory overload</label>
+    <label class="pill"><input type="checkbox" value="Stress">Stress</label>
+    <label class="pill"><input type="checkbox" value="Poor sleep">Poor sleep</label>
+    <label class="pill"><input type="checkbox" value="Standing">Standing</label>
+    <label class="pill"><input type="checkbox" value="Errands">Errands</label>
+    <label class="pill"><input type="checkbox" value="Unknown">Unknown</label>
+  </div>
+
+  <label>Notes (optional)</label>
+  <textarea id="notes" rows="3" placeholder="Anything important?"></textarea>
+
+  <button id="submit" type="button">Save Entry</button>
+  <div class="status" id="status"></div>
+  <div class="tiny">Tip: Add this page to your home screen for one-tap logging.</div>
+
+<script>
+  // Paste your Apps Script Web App URL here (ends with /exec):
+  const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbymjmXCHKFYkmnI8yO65ezT1ejDTh7gosnZN789rjbXglfn6-u1CdmzGK6lbfYKWwh6/exec";
+
+  function checkedValues(containerId) {
+    return [...document.querySelectorAll(`#${containerId} input[type="checkbox"]:checked`)]
+      .map(x => x.value);
+  }
+
+  document.getElementById("submit").addEventListener("click", async () => {
+    const status = document.getElementById("status");
+    status.className = "status";
+    status.textContent = "Saving…";
+
+    const payload = {
+      pem: document.getElementById("pem").value,
+      physical: document.getElementById("physical").value,
+      cognitive: document.getElementById("cognitive").value,
+      emotional: document.getElementById("emotional").value,
+      sensory: document.getElementById("sensory").value,
+      symptoms: checkedValues("symptoms"),
+      triggers: checkedValues("triggers"),
+      notes: document.getElementById("notes").value
+    };
+
+    try {
+      const res = await fetch(WEB_APP_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+
+      const out = await res.json();
+      if (!out.ok) throw new Error(out.error || "Unknown error");
+
+      status.classList.add("ok");
+      status.textContent = "Saved ✅";
+
+      // Optional: clear notes after save
+      document.getElementById("notes").value = "";
+    } catch (err) {
+      status.classList.add("bad");
+      status.textContent = "Save failed ❌ " + err.message;
+    }
+  });
+</script>
+</body>
+</html>
