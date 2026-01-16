@@ -256,7 +256,7 @@
       const n = Object.keys(symptomsRated).length;
 
       prefillText.textContent = `Prefilled from your last entry today (${new Date(last.saved_at).toLocaleTimeString()}).`;
-      prefillDebug.textContent = `Loaded ${n} symptom ratings from localStorage key "${STORAGE_KEY}".`;
+      prefillDebug.textContent = `Loaded ${n} symptom ratings.`;
       clearBtn.style.display = "inline";
       clearBtn.onclick = () => { clearTodayPrefill(); location.reload(); };
 
