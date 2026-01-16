@@ -15,7 +15,6 @@
     .bad { color: #b00020; }
     .tiny { font-size: 13px; color: #666; margin-top: 8px; }
 
-    /* Symptom toggle + rating UI */
     .symptomRow { border: 1px solid #ddd; border-radius: 14px; padding: 10px; margin-top: 10px; }
     .symptomTop { display:flex; align-items:flex-start; justify-content:space-between; gap: 10px; }
     .symptomName { font-weight: 700; line-height: 1.2; }
@@ -54,9 +53,15 @@
   <div class="status" id="status"></div>
   <div class="tiny">Tip: Add this page to your home screen for one-tap logging.</div>
 
+  <!-- Hidden iframe + form: avoids CORS while still submitting data -->
+  <iframe id="sink" name="sink" style="display:none;"></iframe>
+  <form id="sinkForm" method="POST" target="sink" style="display:none;">
+    <input type="hidden" name="payload" id="payloadField" value="">
+  </form>
+
 <script>
-  // Your Apps Script Web App URL (ends with /exec):
-  const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxzhaBEuopiSjqQImNTIa6_U7cIMHst0nss981I0y3jLa-7rJdZwcEjjo54cZI2lgrQ/exec";
+  // Paste your Apps Script Web App URL here (must end in /exec):
+  const WEB_APP_URL = "PASTE_YOUR_APPS_SCRIPT_EXEC_URL_HERE";
 
   // Canonical symptom labels (match your table)
   const SYMPTOMS = [
@@ -210,9 +215,23 @@
     document.getElementById("lp_sens_n").textContent = counts.sensory;
   }
 
-  window.addEventListener("DOMContentLoaded", renderSymptoms);
+  window.addEventListener("DOMContentLoaded", () => {
+    // wire form action
+    document.getElementById("sinkForm").action = WEB_APP_URL;
+    renderSymptoms();
+  });
 
-  document.getElementById("submit").addEventListener("click", async () => {
+  // Mark success when iframe finishes loading the response
+  document.getElementById("sink").addEventListener("load", () => {
+    const status = document.getElementById("status");
+    if (status.textContent.startsWith("Saving")) {
+      status.className = "status ok";
+      status.textContent = "Saved ✅";
+      document.getElementById("notes").value = "";
+    }
+  });
+
+  document.getElementById("submit").addEventListener("click", () => {
     const status = document.getElementById("status");
     status.className = "status";
     status.textContent = "Saving…";
@@ -227,24 +246,16 @@
       notes: document.getElementById("notes").value
     };
 
-    try {
-      await fetch(WEB_APP_URL, {
-        method: "POST",
-        mode: "no-cors",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
+    document.getElementById("payloadField").value = JSON.stringify(payload);
+    document.getElementById("sinkForm").submit();
 
-      // With no-cors, we can't read the response. If the request was sent, show success.
-      status.classList.add("ok");
-      status.textContent = "Saved ✅";
-
-      // Optional: clear notes after save
-      document.getElementById("notes").value = "";
-    } catch (err) {
-      status.classList.add("bad");
-      status.textContent = "Save failed ❌ " + err.message;
-    }
+    // fallback if offline / no response
+    setTimeout(() => {
+      if (status.textContent.startsWith("Saving")) {
+        status.className = "status bad";
+        status.textContent = "Save may have failed ❌ (no response)";
+      }
+    }, 8000);
   });
 </script>
 </body>
