@@ -1,1 +1,364 @@
+<!doctype html>
+<html>
+<head>
+  <base target="_top">
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>PEM History</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Arial; margin: 14px; max-width: 980px; }
+    h2 { margin: 0 0 6px; }
+    .sub { color:#555; margin:0 0 12px; }
+    .bar { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin: 10px 0 14px; }
+    select, button, input { font-size:16px; padding:10px; }
+    button { font-weight:800; }
+    .grid { display:grid; grid-template-columns: 1fr; gap: 14px; }
+    @media(min-width: 900px){ .grid { grid-template-columns: 380px 1fr; } }
 
+    .card { border:1px solid #ddd; border-radius:14px; padding:12px; }
+    .list { display:flex; flex-direction:column; gap:10px; }
+    .item { border:1px solid #eee; border-radius:12px; padding:10px; cursor:pointer; }
+    .item:hover { border-color:#ccc; }
+    .item.active { border-color:#222; }
+    .meta { color:#666; font-size:13px; }
+    .row { display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
+    label { display:block; font-weight:700; margin-top:10px; }
+    textarea { width:100%; font-size:16px; padding:10px; margin-top:6px; }
+
+    .symptomRow { border:1px solid #eee; border-radius:14px; padding:10px; margin-top:10px; }
+    .symptomTop { display:flex; justify-content:space-between; gap:10px; align-items:flex-start; }
+    .symptomName { font-weight:700; line-height:1.2; }
+    .controls { display:none; margin-top:10px; }
+    .sliderWrap { display:flex; align-items:center; gap:10px; }
+    .sliderWrap input[type="range"]{ width:100%; }
+    .badge { min-width:34px; text-align:center; font-weight:800; }
+
+    .status { margin-top:10px; font-weight:800; }
+    .ok { color:#0a7a2f; }
+    .bad { color:#b00020; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+    .tiny { font-size:13px; color:#666; margin-top:8px; }
+  </style>
+</head>
+<body>
+  <h2>PEM History</h2>
+  <p class="sub">View recent entries and overwrite edits back to your PEM_Log sheet.</p>
+
+  <div class="bar">
+    <label style="font-weight:700;">Range</label>
+    <select id="days">
+      <option value="3">Last 3 days</option>
+      <option value="7">Last 7 days</option>
+      <option value="14" selected>Last 14 days</option>
+      <option value="30">Last 30 days</option>
+    </select>
+
+    <label style="font-weight:700;">Limit</label>
+    <select id="limit">
+      <option>25</option>
+      <option selected>50</option>
+      <option>100</option>
+      <option>200</option>
+    </select>
+
+    <button id="refresh" type="button">Refresh</button>
+    <span class="tiny">Tip: click an entry to edit.</span>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <div style="font-weight:800;">Entries</div>
+        <div class="meta" id="countMeta"></div>
+      </div>
+      <div class="list" id="entryList" style="margin-top:10px;"></div>
+    </div>
+
+    <div class="card">
+      <div style="font-weight:800;">Edit entry</div>
+      <div class="tiny" id="editMeta">Select an entry.</div>
+
+      <div id="editor" style="display:none;">
+        <div class="row" style="margin-top:10px;">
+          <div class="card" style="border-radius:12px; padding:10px;">
+            <div style="font-weight:800;">Auto totals</div>
+            <div class="tiny">Computed from selected symptoms</div>
+            <div class="tiny">Physical: <span class="mono" id="t_phys">0</span> (n <span class="mono" id="n_phys">0</span>)</div>
+            <div class="tiny">Cognitive: <span class="mono" id="t_cog">0</span> (n <span class="mono" id="n_cog">0</span>)</div>
+            <div class="tiny">Emotional: <span class="mono" id="t_emo">0</span> (n <span class="mono" id="n_emo">0</span>)</div>
+            <div class="tiny">Sensory: <span class="mono" id="t_sens">0</span> (n <span class="mono" id="n_sens">0</span>)</div>
+          </div>
+          <div>
+            <label>Notes</label>
+            <textarea id="notes" rows="4"></textarea>
+            <button id="save" type="button">Save changes (overwrite)</button>
+            <div class="status" id="status"></div>
+          </div>
+        </div>
+
+        <label style="margin-top:14px;">Symptoms (toggle + rate)</label>
+        <div id="symptomList"></div>
+      </div>
+    </div>
+  </div>
+
+<script>
+  // Keep these identical to your PEM logger for consistent totals
+  const SYMPTOMS = [
+    "Brain fog","Burning sensation on skin","Chronic pain (muscular or joint)","Cognitive dysfunction",
+    "Disturbed sleep pattern","Eye symptoms","Flu-like feelings","Headaches and migraines",
+    "Heaviness in limbs or whole body","Heightened sensory sensitivity","Increased chronic fatigue",
+    "Loss of appetite","Loss of stamina / functional capacity","Muscle fatigue and weakness","Nausea",
+    "Night sweats or chills","Orthostatic intolerance / dizziness","Temperature regulation problems",
+    "Heart palpitations","Speech problems","Temporary paralysis","Short-term memory problems",
+    "Sore throat","Swollen and painful glands","Tinnitus (ringing in ears)","Trembling / limb instability",
+    "Word-finding problems"
+  ];
+
+  const LOAD_MAP = {
+    "Brain fog":                             { physical:false, cognitive:true,  emotional:false, sensory:true  },
+    "Burning sensation on skin":             { physical:true,  cognitive:false, emotional:false, sensory:true  },
+    "Chronic pain (muscular or joint)":      { physical:true,  cognitive:false, emotional:true,  sensory:true  },
+    "Cognitive dysfunction":                 { physical:false, cognitive:true,  emotional:false, sensory:false },
+    "Disturbed sleep pattern":               { physical:true,  cognitive:true,  emotional:true,  sensory:false },
+    "Eye symptoms":                          { physical:true,  cognitive:false, emotional:false, sensory:true  },
+    "Flu-like feelings":                     { physical:true,  cognitive:false, emotional:false, sensory:true  },
+    "Headaches and migraines":               { physical:true,  cognitive:true,  emotional:false, sensory:true  },
+    "Heaviness in limbs or whole body":      { physical:true,  cognitive:false, emotional:false, sensory:true  },
+    "Heightened sensory sensitivity":        { physical:false, cognitive:true,  emotional:true,  sensory:true  },
+    "Increased chronic fatigue":             { physical:true,  cognitive:true,  emotional:true,  sensory:false },
+    "Loss of appetite":                      { physical:true,  cognitive:false, emotional:false, sensory:true  },
+    "Loss of stamina / functional capacity": { physical:true,  cognitive:true,  emotional:true,  sensory:false },
+    "Muscle fatigue and weakness":           { physical:true,  cognitive:false, emotional:false, sensory:false },
+    "Nausea":                                { physical:true,  cognitive:false, emotional:false, sensory:true  },
+    "Night sweats or chills":                { physical:true,  cognitive:false, emotional:false, sensory:true  },
+    "Orthostatic intolerance / dizziness":   { physical:true,  cognitive:true,  emotional:false, sensory:true  },
+    "Temperature regulation problems":       { physical:true,  cognitive:false, emotional:false, sensory:true  },
+    "Heart palpitations":                    { physical:true,  cognitive:false, emotional:true,  sensory:true  },
+    "Speech problems":                       { physical:true,  cognitive:true,  emotional:false, sensory:false },
+    "Temporary paralysis":                   { physical:true,  cognitive:true,  emotional:true,  sensory:false },
+    "Short-term memory problems":            { physical:false, cognitive:true,  emotional:false, sensory:false },
+    "Sore throat":                           { physical:true,  cognitive:false, emotional:false, sensory:true  },
+    "Swollen and painful glands":            { physical:true,  cognitive:false, emotional:false, sensory:true  },
+    "Tinnitus (ringing in ears)":            { physical:false, cognitive:true,  emotional:false, sensory:true  },
+    "Trembling / limb instability":          { physical:true,  cognitive:false, emotional:false, sensory:true  },
+    "Word-finding problems":                 { physical:false, cognitive:true,  emotional:false, sensory:false }
+  };
+
+  let entries = [];
+  let activeRowIndex = null;
+
+  function parseSymptomsJson(cell) {
+    try {
+      if (!cell) return {};
+      if (typeof cell === "string") return JSON.parse(cell);
+      // Sometimes Apps Script returns already-parsed objects, but Sheets usually returns strings
+      return {};
+    } catch {
+      return {};
+    }
+  }
+
+  function computeLoads(symptomsRated) {
+    const totals = { physical:0, cognitive:0, emotional:0, sensory:0 };
+    const counts = { physical:0, cognitive:0, emotional:0, sensory:0 };
+
+    for (const [name, rating] of Object.entries(symptomsRated)) {
+      const map = LOAD_MAP[name];
+      if (!map) continue;
+      if (map.physical)  { totals.physical  += rating; counts.physical++; }
+      if (map.cognitive) { totals.cognitive += rating; counts.cognitive++; }
+      if (map.emotional) { totals.emotional += rating; counts.emotional++; }
+      if (map.sensory)   { totals.sensory   += rating; counts.sensory++; }
+    }
+    return { totals, counts };
+  }
+
+  function renderList() {
+    const list = document.getElementById("entryList");
+    list.innerHTML = "";
+
+    document.getElementById("countMeta").textContent = `${entries.length} shown`;
+
+    entries.forEach((e) => {
+      const d = e.data || {};
+      const ts = e.timestamp ? new Date(e.timestamp) : null;
+      const label = ts ? ts.toLocaleString() : `Row ${e.rowIndex}`;
+
+      const phys = d.physical_total ?? "";
+      const cog  = d.cognitive_total ?? "";
+      const emo  = d.emotional_total ?? "";
+      const sens = d.sensory_total ?? "";
+
+      const div = document.createElement("div");
+      div.className = "item" + (e.rowIndex === activeRowIndex ? " active" : "");
+      div.innerHTML = `
+        <div style="font-weight:800;">${label}</div>
+        <div class="meta">Row ${e.rowIndex} • P:${phys} C:${cog} E:${emo} S:${sens}</div>
+      `;
+      div.addEventListener("click", () => openEntry(e.rowIndex));
+      list.appendChild(div);
+    });
+  }
+
+  function renderSymptoms(symptomsRated) {
+    const root = document.getElementById("symptomList");
+    root.innerHTML = "";
+
+    SYMPTOMS.forEach((name, i) => {
+      const id = `sym_${i}`;
+      const row = document.createElement("div");
+      row.className = "symptomRow";
+
+      const existing = symptomsRated[name];
+      const checked = existing != null;
+      const value = checked ? Number(existing) : 5;
+
+      row.innerHTML = `
+        <div class="symptomTop">
+          <div class="symptomName">${name}</div>
+          <input id="${id}_chk" type="checkbox" ${checked ? "checked" : ""}/>
+        </div>
+        <div class="controls" id="${id}_controls" style="display:${checked ? "block" : "none"};">
+          <div class="sliderWrap">
+            <span class="badge" id="${id}_val">${value}</span>
+            <input id="${id}_range" type="range" min="1" max="10" step="1" value="${value}"/>
+          </div>
+          <div class="tiny">1 = mild, 10 = worst</div>
+        </div>
+      `;
+
+      root.appendChild(row);
+
+      const chk = row.querySelector(`#${id}_chk`);
+      const controls = row.querySelector(`#${id}_controls`);
+      const range = row.querySelector(`#${id}_range`);
+      const val = row.querySelector(`#${id}_val`);
+
+      chk.addEventListener("change", () => {
+        controls.style.display = chk.checked ? "block" : "none";
+        updateTotalsPreview();
+      });
+
+      range.addEventListener("input", () => {
+        val.textContent = range.value;
+        updateTotalsPreview();
+      });
+    });
+
+    updateTotalsPreview();
+  }
+
+  function collectSymptomsRated() {
+    const out = {};
+    const rows = document.querySelectorAll("#symptomList .symptomRow");
+    rows.forEach((row, i) => {
+      const name = SYMPTOMS[i];
+      const chk = row.querySelector("input[type='checkbox']");
+      if (chk.checked) {
+        const rating = Number(row.querySelector("input[type='range']").value);
+        out[name] = rating;
+      }
+    });
+    return out;
+  }
+
+  function updateTotalsPreview() {
+    const symptomsRated = collectSymptomsRated();
+    const { totals, counts } = computeLoads(symptomsRated);
+
+    document.getElementById("t_phys").textContent = totals.physical;
+    document.getElementById("t_cog").textContent  = totals.cognitive;
+    document.getElementById("t_emo").textContent  = totals.emotional;
+    document.getElementById("t_sens").textContent = totals.sensory;
+
+    document.getElementById("n_phys").textContent = counts.physical;
+    document.getElementById("n_cog").textContent  = counts.cognitive;
+    document.getElementById("n_emo").textContent  = counts.emotional;
+    document.getElementById("n_sens").textContent = counts.sensory;
+  }
+
+  function openEntry(rowIndex) {
+    activeRowIndex = rowIndex;
+    const entry = entries.find(x => x.rowIndex === rowIndex);
+    if (!entry) return;
+
+    const d = entry.data || {};
+    const symptomsRated = parseSymptomsJson(d.symptoms_json);
+    const notes = d.notes ?? "";
+
+    document.getElementById("editor").style.display = "block";
+    document.getElementById("editMeta").textContent =
+      (entry.timestamp ? new Date(entry.timestamp).toLocaleString() : `Row ${rowIndex}`) + ` • Editing row ${rowIndex}`;
+
+    document.getElementById("notes").value = notes;
+
+    renderSymptoms(symptomsRated);
+    renderList();
+    document.getElementById("status").textContent = "";
+    document.getElementById("status").className = "status";
+  }
+
+  function refresh() {
+    const days = Number(document.getElementById("days").value);
+    const limit = Number(document.getElementById("limit").value);
+
+    google.script.run
+      .withSuccessHandler((res) => {
+        if (!res.ok) {
+          alert("Load failed");
+          return;
+        }
+        entries = res.rows || [];
+        activeRowIndex = null;
+        document.getElementById("editor").style.display = "none";
+        document.getElementById("editMeta").textContent = "Select an entry.";
+        renderList();
+      })
+      .withFailureHandler((err) => {
+        alert("Load failed: " + err.message);
+      })
+      .listPemEntries({ days, limit });
+  }
+
+  document.getElementById("refresh").addEventListener("click", refresh);
+
+  document.getElementById("save").addEventListener("click", () => {
+    if (!activeRowIndex) return;
+
+    const status = document.getElementById("status");
+    status.className = "status";
+    status.textContent = "Saving…";
+
+    const symptoms_rated = collectSymptomsRated();
+    const { totals, counts } = computeLoads(symptoms_rated);
+
+    const payload = {
+      rowIndex: activeRowIndex,
+      symptoms_rated,
+      load_totals: totals,
+      load_counts: counts,
+      notes: document.getElementById("notes").value
+    };
+
+    google.script.run
+      .withSuccessHandler((res) => {
+        if (!res.ok) throw new Error("Update failed");
+        status.className = "status ok";
+        status.textContent = "Saved ✅ (overwrote row)";
+
+        // refresh list but keep selection
+        refresh();
+        // selection will reset; user can re-open from list if needed
+      })
+      .withFailureHandler((err) => {
+        status.className = "status bad";
+        status.textContent = "Save failed ❌ " + err.message;
+      })
+      .updatePemEntry(payload);
+  });
+
+  // Initial load
+  refresh();
+</script>
+</body>
+</html>
