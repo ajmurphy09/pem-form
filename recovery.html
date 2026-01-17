@@ -4,28 +4,36 @@
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>Recovery Log</title>
   <style>
-    body { font-family: system-ui, -apple-system, Arial; margin: 16px; max-width: 720px; }
+    body { font-family: system-ui, -apple-system, Arial; margin: 16px; max-width: 760px; }
     h2 { margin: 8px 0 2px; }
     .sub { color: #555; margin: 0 0 12px; }
     label { display:block; margin-top: 14px; font-weight: 700; }
     input, select, textarea, button { width: 100%; font-size: 16px; padding: 10px; margin-top: 6px; }
-    button { margin-top: 18px; font-weight: 800; }
+    button { margin-top: 18px; font-weight: 900; }
     .row { display:grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .row3 { display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
     .pillbox { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
     .pill { border: 1px solid #ddd; border-radius: 999px; padding: 6px 10px; font-size: 13px; display:flex; align-items:center; gap:8px; }
     .pill input { width:auto; margin:0; }
-    .status { margin-top: 12px; font-weight: 700; }
+    .status { margin-top: 12px; font-weight: 800; }
     .ok { color: #0a7a2f; }
     .bad { color: #b00020; }
     .tiny { font-size: 13px; color: #666; margin-top: 10px; }
+    details { margin-top: 10px; }
+    details > summary { cursor:pointer; font-weight: 700; color:#333; }
+    .badge { display:inline-block; padding:2px 8px; border:1px solid #ddd; border-radius:999px; font-size:12px; color:#333; margin-left:6px; }
+    .muted { color:#666; font-weight:600; }
   </style>
 </head>
 <body>
   <h2>Recovery Log</h2>
-  <p class="sub">Log recovery actions and what they helped (load impacts).</p>
+  <p class="sub">Log a recovery action. Load types are auto-assigned based on the recovery activity.</p>
 
   <label>Recovery activity</label>
   <select id="recovery"></select>
+
+  <div class="tiny">Auto-assigned loads helped:</div>
+  <div class="pillbox" id="loadPills"></div>
 
   <div class="row">
     <div>
@@ -33,17 +41,12 @@
       <input id="date" type="date"/>
     </div>
     <div>
-      <label>Helped which load(s)?</label>
-      <div class="pillbox" id="loads">
-        <label class="pill"><input type="checkbox" value="Physical">Physical</label>
-        <label class="pill"><input type="checkbox" value="Cognitive">Cognitive</label>
-        <label class="pill"><input type="checkbox" value="Emotional">Emotional</label>
-        <label class="pill"><input type="checkbox" value="Sensory">Sensory</label>
-      </div>
+      <label class="muted">Tip</label>
+      <div class="tiny">You don’t need to pick loads — they’re derived from the recovery activity type.</div>
     </div>
   </div>
 
-  <div class="row">
+  <div class="row3">
     <div>
       <label>Start time</label>
       <input id="start" type="time"/>
@@ -52,10 +55,62 @@
       <label>End time</label>
       <input id="end" type="time"/>
     </div>
+    <div>
+      <label>Duration (min)</label>
+      <input id="duration" type="number" min="0" step="1" inputmode="numeric" placeholder="auto"/>
+      <div class="tiny">Auto-calculated from start/end. You can override.</div>
+    </div>
   </div>
 
+  <label>Recovery role <span class="muted">(what kind of intervention this was)</span></label>
+  <select id="role">
+    <option value="">—</option>
+    <option>Recovery / Restoration</option>
+    <option>Symptom response</option>
+    <option>Autonomic reset attempt</option>
+  </select>
+
+  <label>Intent <span class="muted">(why you did it)</span></label>
+  <select id="intent">
+    <option value="">—</option>
+    <option>Planned rest / maintenance</option>
+    <option>Crash recovery</option>
+    <option>Symptom flare management</option>
+    <option>Autonomic reset</option>
+    <option>Sleep / circadian support</option>
+    <option>Other</option>
+  </select>
+
+  <div class="row">
+    <div>
+      <label>Effect afterward</label>
+      <select id="effect">
+        <option value="">—</option>
+        <option>Better</option>
+        <option>Same</option>
+        <option>Worse</option>
+      </select>
+      <div class="tiny">Quick summary outcome.</div>
+    </div>
+    <div>
+      <label>Effect rating (-5 to +5)</label>
+      <input id="effectScore" type="number" min="-5" max="5" step="1" inputmode="numeric" placeholder="optional"/>
+      <div class="tiny">-5 = much worse, 0 = no change, +5 = much better</div>
+    </div>
+  </div>
+
+  <details>
+    <summary>Symptoms relieved <span class="badge" id="relievedCount">0</span></summary>
+    <div class="pillbox" id="symptomsRelieved"></div>
+  </details>
+
+  <details>
+    <summary>Symptoms triggered / worsened <span class="badge" id="triggeredCount">0</span></summary>
+    <div class="pillbox" id="symptomsTriggered"></div>
+  </details>
+
   <label>Notes (optional)</label>
-  <textarea id="notes" rows="3" placeholder="Any details (settings, duration, effect)?"></textarea>
+  <textarea id="notes" rows="3" placeholder="Any settings or context? e.g., epsom amount, temp; TENS minutes/intensity; compression level…"></textarea>
 
   <button id="submit" type="button">Save Entry</button>
   <div class="status" id="status"></div>
@@ -67,29 +122,65 @@
   </form>
 
 <script>
-  // ✅ Replace with your NEW Recovery Apps Script /exec URL:
+  // ✅ Replace with your Recovery Apps Script /exec URL:
   const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyKRXZMWpSBrRClPcm96grqr5s_MMz3rs7JuyeE8I7FpeDCOVyjEr7bHnvOHwey7FXh/exec";
 
-  const RECOVERY_OPTIONS = [
-    "Epsom salt bath",
-    "Warm bath (no epsom)",
-    "Shower (warm/cool)",
-    "Nap / rest",
-    "Meditation / breathing",
-    "Massage (self or professional)",
-    "Stretching (gentle)",
-    "Heating pad",
-    "Ice / cold pack",
-    "TENS unit",
-    "Compression boots",
-    "Compression socks/garments",
-    "Electrolytes / hydration",
-    "Snack / meal (protein)",
-    "Dark room / sensory break",
-    "Gentle walk / fresh air",
-    "Yoga / mobility (gentle)",
-    "Sauna / heat therapy",
-    "Other"
+  const LOAD_ORDER = ["Physical", "Cognitive", "Emotional", "Sensory"];
+
+  // Recovery activities + auto-assigned loads helped (edit anytime)
+  const RECOVERY_MAP = {
+    "Nap / rest":                   ["Physical","Cognitive","Emotional"],
+    "Epsom salt bath":              ["Physical","Sensory","Emotional"],
+    "Warm bath (no epsom)":         ["Physical","Sensory","Emotional"],
+    "Shower (warm/cool)":           ["Physical","Sensory"],
+    "Massage (self or professional)":["Physical","Sensory","Emotional"],
+    "TENS unit":                    ["Physical","Sensory"],
+    "Compression boots":            ["Physical","Sensory"],
+    "Compression socks/garments":   ["Physical"],
+    "Heating pad":                  ["Physical","Sensory"],
+    "Ice / cold pack":              ["Physical","Sensory"],
+    "Meditation / breathing":       ["Emotional","Cognitive","Sensory"],
+    "Dark room / sensory break":    ["Sensory","Cognitive","Emotional"],
+    "Electrolytes / hydration":     ["Physical"],
+    "Snack / meal (protein)":       ["Physical"],
+    "Gentle stretching":            ["Physical","Sensory"],
+    "Gentle walk / fresh air":      ["Physical","Sensory","Emotional"],
+    "Yoga / mobility (gentle)":     ["Physical","Sensory","Emotional"],
+    "Sauna / heat therapy":         ["Physical","Sensory"],
+    "Other":                        []   // will be empty unless you want a default
+  };
+
+  const RECOVERY_OPTIONS = Object.keys(RECOVERY_MAP);
+
+  // Same symptom list used in PEM logger
+  const SYMPTOMS = [
+    "Brain fog",
+    "Burning sensation on skin",
+    "Chronic pain (muscular or joint)",
+    "Cognitive dysfunction",
+    "Disturbed sleep pattern",
+    "Eye symptoms",
+    "Flu-like feelings",
+    "Headaches and migraines",
+    "Heaviness in limbs or whole body",
+    "Heightened sensory sensitivity",
+    "Increased chronic fatigue",
+    "Loss of appetite",
+    "Loss of stamina / functional capacity",
+    "Muscle fatigue and weakness",
+    "Nausea",
+    "Night sweats or chills",
+    "Orthostatic intolerance / dizziness",
+    "Temperature regulation problems",
+    "Heart palpitations",
+    "Speech problems",
+    "Temporary paralysis",
+    "Short-term memory problems",
+    "Sore throat",
+    "Swollen and painful glands",
+    "Tinnitus (ringing in ears)",
+    "Trembling / limb instability",
+    "Word-finding problems"
   ];
 
   function checkedValues(containerId) {
@@ -109,28 +200,117 @@
     const t = `${hh}:${mm}`;
     document.getElementById("start").value = t;
     document.getElementById("end").value = t;
+
+    updateDuration();
   }
 
-  function renderRecoveryDropdown() {
-    const sel = document.getElementById("recovery");
+  function renderDropdown(id, items) {
+    const sel = document.getElementById(id);
     sel.innerHTML = "";
     const opt0 = document.createElement("option");
     opt0.value = "";
     opt0.textContent = "—";
     sel.appendChild(opt0);
-
-    for (const r of RECOVERY_OPTIONS) {
+    items.forEach(item => {
       const opt = document.createElement("option");
-      opt.value = r;
-      opt.textContent = r;
+      opt.value = item;
+      opt.textContent = item;
       sel.appendChild(opt);
+    });
+  }
+
+  function renderSymptomPills(containerId) {
+    const root = document.getElementById(containerId);
+    root.innerHTML = "";
+    SYMPTOMS.forEach(s => {
+      const lbl = document.createElement("label");
+      lbl.className = "pill";
+      lbl.innerHTML = `<input type="checkbox" value="${s}">${s}`;
+      root.appendChild(lbl);
+    });
+  }
+
+  function updateCounts() {
+    const relieved = checkedValues("symptomsRelieved").length;
+    const triggered = checkedValues("symptomsTriggered").length;
+    document.getElementById("relievedCount").textContent = relieved;
+    document.getElementById("triggeredCount").textContent = triggered;
+  }
+
+  function timeToMinutes(t) {
+    if (!t || !t.includes(":")) return null;
+    const [hh, mm] = t.split(":").map(x => Number(x));
+    if (Number.isNaN(hh) || Number.isNaN(mm)) return null;
+    return hh * 60 + mm;
+  }
+
+  function updateDuration() {
+    const start = timeToMinutes(document.getElementById("start").value);
+    const end = timeToMinutes(document.getElementById("end").value);
+    if (start == null || end == null) return;
+
+    let diff = end - start;
+    if (diff < 0) diff += 24 * 60; // crossing midnight
+
+    const durField = document.getElementById("duration");
+    if (durField.value === "" || durField.dataset.autofilled === "1") {
+      durField.value = diff;
+      durField.dataset.autofilled = "1";
     }
+  }
+
+  function getLoadsForRecovery(recovery) {
+    const loads = RECOVERY_MAP[recovery] || [];
+    return LOAD_ORDER.filter(x => loads.includes(x));
+  }
+
+  function renderLoadPills(loads) {
+    const root = document.getElementById("loadPills");
+    root.innerHTML = "";
+    if (!loads.length) {
+      const div = document.createElement("div");
+      div.className = "tiny";
+      div.textContent = "— (no loads assigned for this selection)";
+      root.appendChild(div);
+      return;
+    }
+    loads.forEach(l => {
+      const div = document.createElement("div");
+      div.className = "pill";
+      div.textContent = l;
+      root.appendChild(div);
+    });
   }
 
   window.addEventListener("DOMContentLoaded", () => {
     document.getElementById("sinkForm").action = WEB_APP_URL;
-    renderRecoveryDropdown();
+
+    renderDropdown("recovery", RECOVERY_OPTIONS);
+    renderSymptomPills("symptomsRelieved");
+    renderSymptomPills("symptomsTriggered");
     setNowDefaults();
+    updateCounts();
+    renderLoadPills([]);
+
+    document.getElementById("recovery").addEventListener("change", () => {
+      const recovery = document.getElementById("recovery").value;
+      renderLoadPills(getLoadsForRecovery(recovery));
+    });
+
+    document.getElementById("start").addEventListener("change", () => {
+      document.getElementById("duration").dataset.autofilled = "1";
+      updateDuration();
+    });
+    document.getElementById("end").addEventListener("change", () => {
+      document.getElementById("duration").dataset.autofilled = "1";
+      updateDuration();
+    });
+    document.getElementById("duration").addEventListener("input", () => {
+      document.getElementById("duration").dataset.autofilled = "0";
+    });
+
+    document.getElementById("symptomsRelieved").addEventListener("change", updateCounts);
+    document.getElementById("symptomsTriggered").addEventListener("change", updateCounts);
   });
 
   document.getElementById("submit").addEventListener("click", () => {
@@ -145,14 +325,29 @@
       return;
     }
 
-    const loads_helped = checkedValues("loads");
+    const loads_helped = getLoadsForRecovery(recovery);
+    const symptoms_relieved = checkedValues("symptomsRelieved");
+    const symptoms_triggered = checkedValues("symptomsTriggered");
 
     const payload = {
       recovery,
       date: document.getElementById("date").value,
       start_time: document.getElementById("start").value,
       end_time: document.getElementById("end").value,
-      loads_helped, // array of "Physical"|"Cognitive"|"Emotional"|"Sensory"
+      duration_min: document.getElementById("duration").value ? Number(document.getElementById("duration").value) : "",
+      role: document.getElementById("role").value,
+      intent: document.getElementById("intent").value,
+      effect: document.getElementById("effect").value,
+      effect_score: document.getElementById("effectScore").value ? Number(document.getElementById("effectScore").value) : "",
+      loads_helped,
+      load_flags: {
+        physical: loads_helped.includes("Physical") ? 1 : 0,
+        cognitive: loads_helped.includes("Cognitive") ? 1 : 0,
+        emotional: loads_helped.includes("Emotional") ? 1 : 0,
+        sensory: loads_helped.includes("Sensory") ? 1 : 0
+      },
+      symptoms_relieved,
+      symptoms_triggered,
       notes: document.getElementById("notes").value
     };
 
