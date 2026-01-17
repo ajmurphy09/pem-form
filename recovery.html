@@ -1,1 +1,168 @@
+<!doctype html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Recovery Log</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Arial; margin: 16px; max-width: 720px; }
+    h2 { margin: 8px 0 2px; }
+    .sub { color: #555; margin: 0 0 12px; }
+    label { display:block; margin-top: 14px; font-weight: 700; }
+    input, select, textarea, button { width: 100%; font-size: 16px; padding: 10px; margin-top: 6px; }
+    button { margin-top: 18px; font-weight: 800; }
+    .row { display:grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .pillbox { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+    .pill { border: 1px solid #ddd; border-radius: 999px; padding: 6px 10px; font-size: 13px; display:flex; align-items:center; gap:8px; }
+    .pill input { width:auto; margin:0; }
+    .status { margin-top: 12px; font-weight: 700; }
+    .ok { color: #0a7a2f; }
+    .bad { color: #b00020; }
+    .tiny { font-size: 13px; color: #666; margin-top: 10px; }
+  </style>
+</head>
+<body>
+  <h2>Recovery Log</h2>
+  <p class="sub">Log recovery actions and what they helped (load impacts).</p>
 
+  <label>Recovery activity</label>
+  <select id="recovery"></select>
+
+  <div class="row">
+    <div>
+      <label>Date</label>
+      <input id="date" type="date"/>
+    </div>
+    <div>
+      <label>Helped which load(s)?</label>
+      <div class="pillbox" id="loads">
+        <label class="pill"><input type="checkbox" value="Physical">Physical</label>
+        <label class="pill"><input type="checkbox" value="Cognitive">Cognitive</label>
+        <label class="pill"><input type="checkbox" value="Emotional">Emotional</label>
+        <label class="pill"><input type="checkbox" value="Sensory">Sensory</label>
+      </div>
+    </div>
+  </div>
+
+  <div class="row">
+    <div>
+      <label>Start time</label>
+      <input id="start" type="time"/>
+    </div>
+    <div>
+      <label>End time</label>
+      <input id="end" type="time"/>
+    </div>
+  </div>
+
+  <label>Notes (optional)</label>
+  <textarea id="notes" rows="3" placeholder="Any details (settings, duration, effect)?"></textarea>
+
+  <button id="submit" type="button">Save Entry</button>
+  <div class="status" id="status"></div>
+
+  <!-- Hidden iframe + form (CORS-proof submit) -->
+  <iframe id="sink" name="sink" style="display:none;"></iframe>
+  <form id="sinkForm" method="POST" target="sink" style="display:none;">
+    <input type="hidden" name="payload" id="payloadField" value="">
+  </form>
+
+<script>
+  // ✅ Replace with your NEW Recovery Apps Script /exec URL:
+  const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyKRXZMWpSBrRClPcm96grqr5s_MMz3rs7JuyeE8I7FpeDCOVyjEr7bHnvOHwey7FXh/exec";
+
+  const RECOVERY_OPTIONS = [
+    "Epsom salt bath",
+    "Warm bath (no epsom)",
+    "Shower (warm/cool)",
+    "Nap / rest",
+    "Meditation / breathing",
+    "Massage (self or professional)",
+    "Stretching (gentle)",
+    "Heating pad",
+    "Ice / cold pack",
+    "TENS unit",
+    "Compression boots",
+    "Compression socks/garments",
+    "Electrolytes / hydration",
+    "Snack / meal (protein)",
+    "Dark room / sensory break",
+    "Gentle walk / fresh air",
+    "Yoga / mobility (gentle)",
+    "Sauna / heat therapy",
+    "Other"
+  ];
+
+  function checkedValues(containerId) {
+    return [...document.querySelectorAll(`#${containerId} input[type="checkbox"]:checked`)]
+      .map(x => x.value);
+  }
+
+  function setNowDefaults() {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, "0");
+    const d = String(now.getDate()).padStart(2, "0");
+    document.getElementById("date").value = `${y}-${m}-${d}`;
+
+    const hh = String(now.getHours()).padStart(2, "0");
+    const mm = String(now.getMinutes()).padStart(2, "0");
+    const t = `${hh}:${mm}`;
+    document.getElementById("start").value = t;
+    document.getElementById("end").value = t;
+  }
+
+  function renderRecoveryDropdown() {
+    const sel = document.getElementById("recovery");
+    sel.innerHTML = "";
+    const opt0 = document.createElement("option");
+    opt0.value = "";
+    opt0.textContent = "—";
+    sel.appendChild(opt0);
+
+    for (const r of RECOVERY_OPTIONS) {
+      const opt = document.createElement("option");
+      opt.value = r;
+      opt.textContent = r;
+      sel.appendChild(opt);
+    }
+  }
+
+  window.addEventListener("DOMContentLoaded", () => {
+    document.getElementById("sinkForm").action = WEB_APP_URL;
+    renderRecoveryDropdown();
+    setNowDefaults();
+  });
+
+  document.getElementById("submit").addEventListener("click", () => {
+    const status = document.getElementById("status");
+    status.className = "status";
+    status.textContent = "Saving…";
+
+    const recovery = document.getElementById("recovery").value;
+    if (!recovery) {
+      status.className = "status bad";
+      status.textContent = "Choose a recovery activity first ❌";
+      return;
+    }
+
+    const loads_helped = checkedValues("loads");
+
+    const payload = {
+      recovery,
+      date: document.getElementById("date").value,
+      start_time: document.getElementById("start").value,
+      end_time: document.getElementById("end").value,
+      loads_helped, // array of "Physical"|"Cognitive"|"Emotional"|"Sensory"
+      notes: document.getElementById("notes").value
+    };
+
+    document.getElementById("payloadField").value = JSON.stringify(payload);
+    document.getElementById("sinkForm").action = WEB_APP_URL;
+    document.getElementById("sinkForm").submit();
+
+    status.className = "status ok";
+    status.textContent = "Sent ✅";
+  });
+</script>
+</body>
+</html>
