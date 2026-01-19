@@ -92,16 +92,24 @@
       </select>
       <div class="tiny">Quick summary outcome.</div>
     </div>
+
     <div>
       <label>Effect rating (-5 to +5)</label>
-      <!-- UPDATED: text + decimal keypad typically includes minus on mobile -->
-      <input
-        id="effectScore"
-        type="text"
-        inputmode="decimal"
-        pattern="^-?[0-5]$"
-        placeholder="optional (−5 to +5)"
-      />
+      <!-- UPDATED: dropdown guarantees negatives on mobile -->
+      <select id="effectScore">
+        <option value="">—</option>
+        <option value="-5">-5 (much worse)</option>
+        <option value="-4">-4</option>
+        <option value="-3">-3</option>
+        <option value="-2">-2</option>
+        <option value="-1">-1</option>
+        <option value="0">0 (no change)</option>
+        <option value="1">+1</option>
+        <option value="2">+2</option>
+        <option value="3">+3</option>
+        <option value="4">+4</option>
+        <option value="5">+5 (much better)</option>
+      </select>
       <div class="tiny">-5 = much worse, 0 = no change, +5 = much better</div>
     </div>
   </div>
@@ -154,7 +162,7 @@
     "Gentle walk / fresh air":      ["Physical","Sensory","Emotional"],
     "Yoga / mobility (gentle)":     ["Physical","Sensory","Emotional"],
     "Sauna / heat therapy":         ["Physical","Sensory"],
-    "Other":                        []   // will be empty unless you want a default
+    "Other":                        []
   };
 
   const RECOVERY_OPTIONS = Object.keys(RECOVERY_MAP);
@@ -289,15 +297,12 @@
     });
   }
 
-  // UPDATED: parse/clamp effect score from text field to integer -5..5 (or "")
-  function parseEffectScore() {
-    const raw = String(document.getElementById("effectScore").value || "").trim();
-    if (raw === "") return "";
-    const n = Number(raw);
-    if (!Number.isFinite(n)) return "";
-    const rounded = Math.round(n);
-    if (rounded < -5 || rounded > 5) return "";
-    return rounded;
+  // UPDATED: read dropdown value and convert to number (or "")
+  function getEffectScoreValue() {
+    const v = document.getElementById("effectScore").value;
+    if (v === "") return "";
+    const n = Number(v);
+    return Number.isFinite(n) ? n : "";
   }
 
   window.addEventListener("DOMContentLoaded", () => {
@@ -356,7 +361,7 @@
       role: document.getElementById("role").value,
       intent: document.getElementById("intent").value,
       effect: document.getElementById("effect").value,
-      effect_score: parseEffectScore(),
+      effect_score: getEffectScoreValue(),
       loads_helped,
       load_flags: {
         physical: loads_helped.includes("Physical") ? 1 : 0,
