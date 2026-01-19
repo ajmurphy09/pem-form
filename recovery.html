@@ -94,7 +94,14 @@
     </div>
     <div>
       <label>Effect rating (-5 to +5)</label>
-      <input id="effectScore" type="number" min="-5" max="5" step="1" inputmode="numeric" placeholder="optional"/>
+      <!-- UPDATED: text + decimal keypad typically includes minus on mobile -->
+      <input
+        id="effectScore"
+        type="text"
+        inputmode="decimal"
+        pattern="^-?[0-5]$"
+        placeholder="optional (−5 to +5)"
+      />
       <div class="tiny">-5 = much worse, 0 = no change, +5 = much better</div>
     </div>
   </div>
@@ -282,6 +289,17 @@
     });
   }
 
+  // UPDATED: parse/clamp effect score from text field to integer -5..5 (or "")
+  function parseEffectScore() {
+    const raw = String(document.getElementById("effectScore").value || "").trim();
+    if (raw === "") return "";
+    const n = Number(raw);
+    if (!Number.isFinite(n)) return "";
+    const rounded = Math.round(n);
+    if (rounded < -5 || rounded > 5) return "";
+    return rounded;
+  }
+
   window.addEventListener("DOMContentLoaded", () => {
     document.getElementById("sinkForm").action = WEB_APP_URL;
 
@@ -338,7 +356,7 @@
       role: document.getElementById("role").value,
       intent: document.getElementById("intent").value,
       effect: document.getElementById("effect").value,
-      effect_score: document.getElementById("effectScore").value ? Number(document.getElementById("effectScore").value) : "",
+      effect_score: parseEffectScore(),
       loads_helped,
       load_flags: {
         physical: loads_helped.includes("Physical") ? 1 : 0,
