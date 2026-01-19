@@ -1,3 +1,8 @@
+##run prompt :
+#python3 ~/extract_cfs_pem.py \
+#  --submissions ~/Downloads/reddit/subreddits24/cfs_submissions.zst \
+#  --comments ~/Downloads/reddit/subreddits24/cfs_comments.zst \
+#  --out ~/Downloads/cfs_clean.parquet
 #!/usr/bin/env python3
 """
 Extract r/CFS submissions + comments from Pushshift-style .zst NDJSON dumps
